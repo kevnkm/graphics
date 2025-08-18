@@ -2,6 +2,13 @@ import React from "react";
 import { useState } from "react";
 import * as VolumetricCloudCanvas from "../../components/VolumetricCloudCanvas";
 
+// References:
+// https://iquilezles.org/articles/dynclouds/
+// https://blog.maximeheckel.com/posts/real-time-cloudscapes-with-volumetric-raymarching/
+// https://www.thefrontdev.co.uk/real-time-volumetric-clouds-glsl-and-three
+// https://www.shadertoy.com/view/3sffzj
+// https://www.shadertoy.com/view/XdBSWd
+
 const componentGroupList = [
   {
     groupName: "Blob",
