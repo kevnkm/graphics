@@ -4,7 +4,10 @@ import { Link } from "react-router-dom";
 const projects = [
   { name: "Ray Tracing", path: "/ray-tracing" },
   { name: "Ray Marching", path: "/ray-marching" },
+  { name: "Barrel Distortion", path: "/barrel-distortion" },
+  { name: "Boids Simulation", path: "/boids-simulation" },
   { name: "Volumetric Cloud", path: "/volumetric-cloud" },
+  { name: "Shader FX", path: "/shader-fx" },
 ];
 
 function Home() {
