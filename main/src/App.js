@@ -6,6 +6,7 @@ import BoidsSimulation from "./pages/projects/BoidsSimulation";
 import RayMarching from "./pages/projects/RayMarching";
 import RayTracing from "./pages/projects/RayTracing";
 import VolumetricCloud from "./pages/projects/VolumetricCloud";
+import ShaderFX from "./pages/projects/ShaderFX";
 import logo from "./images/memoji_laptop.png";
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
           <Route path="/ray-marching" element={<RayMarching />} />
           <Route path="/ray-tracing" element={<RayTracing />} />
           <Route path="/volumetric-cloud" element={<VolumetricCloud />} />
+          <Route path="/shader-fx" element={<ShaderFX />} />
         </Routes>
       </div>
     </BrowserRouter>
