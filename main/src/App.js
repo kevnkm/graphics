@@ -24,7 +24,7 @@ function App() {
                 draggable="false"
               />
               <span className="text-xl font-bold font-dot-gothic-16 sm:inline ml-2">
-                Kevin Kim &mdash; Graphics Hub
+                Graphics Hub
               </span>
             </Link>
           </div>
