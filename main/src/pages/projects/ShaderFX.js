@@ -1,6 +1,12 @@
+// main/src/pages/projects/ShaderFX.js
+
 import React from "react";
 import { useState } from "react";
-import * as ShaderFXCanvas from "../../components/ShaderFXCanvas";
+import { Voronoi2D } from "../../components/Voronoi2D";
+import { Fire2D } from "../../components/Fire2D";
+import { Smoke2D } from "../../components/Smoke2D";
+import { Mandelbrot1, Mandelbrot2 } from "../../components/Fractals2D";
+import { WaterTexture } from "../../components/Water";
 
 const componentGroupList = [
   {
@@ -15,41 +21,81 @@ const componentGroupList = [
       </>
     ),
     components: {
-      A1: () => <ShaderFXCanvas.A1 />,
+      A1: () => <Voronoi2D />,
     },
   },
   {
-    groupName: "3D Ray Marching",
+    groupName: "Fire",
     description: (
       <>
-        This scene showcases a 3D ray marching renderer that visualizes complex
-        shapes like spheres, toruses, and cubes using Signed Distance Fields
-        (SDF). A reference for various SDFs including the ones used in this
-        project can be found at{" "}
-        <a
-          href="https://iquilezles.org/articles/distfunctions/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:underline ml-1"
-        >
-          this page by Inigo Quilez
-        </a>
-        . Instead of traditional rendering methods, the algorithm marches rays
-        step by step through space, dynamically adjusting their movement based
-        on the closest object's distance. A key feature of this approach is
-        smooth blending, allowing nearby shapes to merge seamlessly.
+        Purely procedural 2-D fire and a lightweight smoke advection demo. Both
+        run in a single fragment shader - no textures required.
       </>
     ),
     components: {
-      B1: () => <ShaderFXCanvas.B1 />,
+      B1: () => <Fire2D />,
     },
   },
+  {
+    groupName: "Smoke",
+    description: (
+      <>
+        Purely procedural 2-D fire and a lightweight smoke advection demo. Both
+        run in a single fragment shader - no textures required.
+      </>
+    ),
+    components: {
+      C2: () => <Smoke2D />,
+    },
+  },
+  {
+    groupName: "Fractals",
+    description: (
+      <>
+        Interactive Mandelbrot and Julia sets. Drag the mouse to zoom / pan
+        (Mandelbrot) or to change the complex constant *c* (Julia).
+      </>
+    ),
+    components: {
+      D1: () => <Mandelbrot1 />,
+      D2: () => <Mandelbrot2 />,
+    },
+  },
+  {
+    groupName: "Water",
+    description: (
+      <>
+        A stylised water surface using a summed sine-wave height field, fake
+        refraction and Fresnel term. Move the mouse to tilt the view.
+      </>
+    ),
+    components: {
+      E1: () => <WaterTexture />,
+    },
+  },
+  // {
+  //   groupName: "Stylized Shaders",
+  //   description: (
+  //     <>
+  //       Cel-shading (toon) and a pencil-sketch post-process. Both use the same
+  //       simple sphere scene for demonstration.
+  //     </>
+  //   ),
+  //   components: {
+  //     F1: () => <ShaderFXCanvas.F1 />,
+  //     F2: () => <ShaderFXCanvas.F2 />,
+  //   },
+  // },
 ];
 
 function ShaderFX() {
   const [activeTabs, setActiveTabs] = useState({
     "2D Voronoi Diagram": "A1",
-    "3D Ray Marching": "B1",
+    Fire: "B1",
+    Smoke: "C2",
+    Fractals: "D1",
+    Water: "E1",
+    "Stylized Shaders": "F1",
   });
 
   const handleTabChange = (groupName, tab) => {
@@ -66,11 +112,11 @@ function ShaderFX() {
           Introduction
         </h1>
         <p className="text-center">
-          I'm personally not a good designer. However, it seems like math is
-          something I can do. This project is a collection of some math-based
-          visualizations that I have created. The goal is to explore the
-          intersection of math and design, and to create visually appealing
-          graphics that are also mathematically interesting.
+          It's amazing how math can be used to create beautiful visuals. This
+          project is a collection of some math-based visualizations that I have
+          created. The goal is to explore the intersection of math and design,
+          and to create visually appealing graphics that are also mathematically
+          interesting.
         </p>
 
         {componentGroupList.map((group, index) => (

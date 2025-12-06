@@ -1,44 +1,6 @@
+// main/src/components/RayMarchingCanvas.js
+
 import React, { useRef, useEffect, useState } from "react";
-
-const generalVertexShaderSource = `
-attribute vec4 a_position;
-void main() {
-  gl_Position = a_position;
-}
-`;
-
-const generalFragmentShaderSource = `
-precision mediump float;
-uniform vec4 u_color;
-void main() {
-  gl_FragColor = u_color;
-}
-`;
-
-const circleVertexShaderSource = `
-attribute vec2 a_position;
-attribute vec2 a_center;
-attribute float a_radius;
-attribute vec4 a_color;
-varying vec2 v_position;
-varying vec4 v_color;
-void main() {
-  gl_Position = vec4(a_position * a_radius * 2.0 + a_center, 0.0, 1.0);
-  v_position = a_position;
-  v_color = a_color;
-}
-`;
-
-const circleFragmentShaderSource = `
-precision mediump float;
-varying vec2 v_position;
-varying vec4 v_color;
-void main() {
-  float dist = length(v_position);
-  if (dist > 0.5) discard;
-  gl_FragColor = v_color;
-}
-`;
 
 const createShader = (gl, type, source) => {
   const shader = gl.createShader(type);
@@ -67,6 +29,10 @@ export const A1 = () => {
   const canvasRef = useRef(null);
   const mousePosRef = useRef({ x: 0, y: 0 });
   const draggingRef = useRef({ obstacleIndex: -1, touchId: null });
+  const isHoveringRef = useRef(false);
+  const rotationAngleRef = useRef(0);
+  const rotationSpeed = 0.5; // radians per second
+  const animationFrameRef = useRef(null);
 
   const obstacles = useRef([
     { x: -0.7, y: 0.3, radius: 0.15 },
@@ -109,14 +75,31 @@ export const A1 = () => {
     const toSceneX = (x) => (x / canvas.width) * 2 - 1;
     const toSceneY = (y) => -((y / canvas.height) * 2 - 1);
 
-    const draw = () => {
+    let lastTime = performance.now();
+
+    const draw = (currentTime) => {
+      const deltaTime = (currentTime - lastTime) / 1000; // seconds
+      lastTime = currentTime;
+
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const mouseX = mousePosRef.current.x;
-      const mouseY = mousePosRef.current.y;
-      const dirX = mouseX - rayStart.x;
-      const dirY = mouseY - rayStart.y;
+      let targetX, targetY;
+
+      if (isHoveringRef.current) {
+        // Use mouse position when hovering
+        targetX = mousePosRef.current.x;
+        targetY = mousePosRef.current.y;
+      } else {
+        // Auto-rotate around center
+        rotationAngleRef.current += rotationSpeed * deltaTime;
+        const radius = 1.0;
+        targetX = Math.cos(rotationAngleRef.current) * radius;
+        targetY = Math.sin(rotationAngleRef.current) * radius;
+      }
+
+      const dirX = targetX - rayStart.x;
+      const dirY = targetY - rayStart.y;
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
       const rayDirX = length > 0 ? dirX / length : 1;
       const rayDirY = length > 0 ? dirY / length : 0;
@@ -166,15 +149,15 @@ export const A1 = () => {
 
       // Draw distance circles and step points
       marchPoints.forEach((point, index) => {
-        // Draw distance circle (outline representing SDF distance)
+        // Distance circle
         ctx.strokeStyle = "yellow";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        const radius = Math.max(0, (point.distance * canvas.width) / 2); // Ensure radius is non-negative
+        const radius = Math.max(0, (point.distance * canvas.width) / 2);
         ctx.arc(toCanvasX(point.x), toCanvasY(point.y), radius, 0, 2 * Math.PI);
         ctx.stroke();
 
-        // Draw step point (small filled circle)
+        // Step point
         ctx.fillStyle = index === marchPoints.length - 1 ? "red" : "yellow";
         ctx.beginPath();
         ctx.arc(
@@ -192,6 +175,9 @@ export const A1 = () => {
       ctx.beginPath();
       ctx.arc(toCanvasX(rayStart.x), toCanvasY(rayStart.y), 5, 0, 2 * Math.PI);
       ctx.fill();
+
+      // Continue animation
+      animationFrameRef.current = requestAnimationFrame(draw);
     };
 
     const isPointInObstacle = (x, y, obstacle) => {
@@ -200,7 +186,15 @@ export const A1 = () => {
       return Math.sqrt(dx * dx + dy * dy) < obstacle.radius;
     };
 
-    // Mouse events (PC)
+    // Mouse events
+    const handleMouseEnter = () => {
+      isHoveringRef.current = true;
+    };
+
+    const handleMouseLeave = () => {
+      isHoveringRef.current = false;
+    };
+
     const handleMouseDown = (event) => {
       const rect = canvas.getBoundingClientRect();
       const x = toSceneX(event.clientX - rect.left);
@@ -225,16 +219,16 @@ export const A1 = () => {
       } else {
         mousePosRef.current = { x, y };
       }
-      draw();
     };
 
     const handleMouseUp = () => {
       draggingRef.current.obstacleIndex = -1;
     };
 
-    // Touch events (Mobile)
+    // Touch events
     const handleTouchStart = (event) => {
       event.preventDefault();
+      isHoveringRef.current = true;
       const rect = canvas.getBoundingClientRect();
       const touch = event.touches[0];
       const x = toSceneX(touch.clientX - rect.left);
@@ -261,19 +255,17 @@ export const A1 = () => {
           if (draggingRef.current.obstacleIndex !== -1) {
             obstacles[draggingRef.current.obstacleIndex].x = x;
             obstacles[draggingRef.current.obstacleIndex].y = y;
-            draw();
           }
           return;
         }
       }
 
-      if (draggingRef.current.obstacleIndex === -1) {
+      if (draggingRef.current.obstacleIndex === -1 && touches.length > 0) {
         const touch = touches[0];
         mousePosRef.current = {
           x: toSceneX(touch.clientX - rect.left),
           y: toSceneY(touch.clientY - rect.top),
         };
-        draw();
       }
     };
 
@@ -287,6 +279,12 @@ export const A1 = () => {
           break;
         }
       }
+      // Optionally treat touch end as "leave" after short delay
+      setTimeout(() => {
+        if (event.touches.length === 0) {
+          isHoveringRef.current = false;
+        }
+      }, 100);
     };
 
     const handleResize = () => {
@@ -294,27 +292,36 @@ export const A1 = () => {
       if (!parent) return;
       canvas.width = parent.clientWidth;
       canvas.height = parent.clientWidth;
-      draw();
     };
 
     handleResize();
     window.addEventListener("resize", handleResize);
+    canvas.addEventListener("mouseenter", handleMouseEnter);
+    canvas.addEventListener("mouseleave", handleMouseLeave);
     canvas.addEventListener("mousedown", handleMouseDown);
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("mouseup", handleMouseUp);
     canvas.addEventListener("touchstart", handleTouchStart);
     canvas.addEventListener("touchmove", handleTouchMove);
     canvas.addEventListener("touchend", handleTouchEnd);
-    draw();
+
+    // Start animation loop
+    lastTime = performance.now();
+    animationFrameRef.current = requestAnimationFrame(draw);
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      canvas.removeEventListener("mouseenter", handleMouseEnter);
+      canvas.removeEventListener("mouseleave", handleMouseLeave);
       canvas.removeEventListener("mousedown", handleMouseDown);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseup", handleMouseUp);
       canvas.removeEventListener("touchstart", handleTouchStart);
       canvas.removeEventListener("touchmove", handleTouchMove);
       canvas.removeEventListener("touchend", handleTouchEnd);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
     };
   }, []);
 
