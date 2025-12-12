@@ -55,8 +55,8 @@ function BarrelDistortion() {
   };
 
   return (
-    <div className="relative w-full min-h-screen bg-white flex justify-center">
-      <div className="container mx-auto p-6 w-full max-w-md sm:max-w-2xl lg:max-w-4xl pb-20">
+    <div className="relative w-full min-h-[calc(100vh)] bg-white flex justify-center">
+      <div className="container mx-auto p-4 w-full max-w-md sm:max-w-2xl lg:max-w-3xl pb-16">
         <h1 className="text-xl font-bold text-center text-gray-800 mb-3">
           Introduction
         </h1>
