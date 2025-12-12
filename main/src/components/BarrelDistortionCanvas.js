@@ -26,6 +26,39 @@ const createProgram = (gl, vs, fs) => {
 };
 
 /* -------------------------------------------------------------------------- */
+/*                            IN-CANVAS CONTROL PANEL                          */
+/* -------------------------------------------------------------------------- */
+const ControlPanel = ({ label, value, min, max, step, onChange }) => (
+  <div
+    className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto
+                  flex items-center gap-5 px-8 py-4 bg-white rounded-full shadow-2xl
+                  select-none z-10"
+  >
+    <span className="text-gray-800 font-medium text-sm min-w-[100px] text-right">
+      {label} {value.toFixed(2)}
+    </span>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(parseFloat(e.target.value))}
+      className="w-64 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer
+                 [&::-webkit-slider-thumb]:appearance-none
+                 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5
+                 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600
+                 [&::-webkit-slider-thumb]:shadow-md"
+      style={{
+        background: `linear-gradient(to right, #3b3e5fc ${
+          ((value - min) / (max - min)) * 100
+        }%, #e0e0e0 ${((value - min) / (max - min)) * 100}%)`,
+      }}
+    />
+  </div>
+);
+
+/* -------------------------------------------------------------------------- */
 /*                                   A1 – 2D CANVAS                           */
 /* -------------------------------------------------------------------------- */
 export const A1 = () => {
@@ -127,27 +160,16 @@ export const A1 = () => {
   }, [k]);
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      <canvas
-        ref={canvasRef}
-        className="border border-gray-300 rounded-lg shadow-sm"
-        style={{ maxWidth: "100%" }}
+    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} className="max-w-full max-h-full" />
+      <ControlPanel
+        label="k ="
+        value={k}
+        min={-1}
+        max={1}
+        step={0.01}
+        onChange={setK}
       />
-      <div className="flex items-center space-x-3 w-full max-w-xs">
-        <label htmlFor="k-slider" className="text-sm font-medium">
-          k = {k.toFixed(2)}
-        </label>
-        <input
-          id="k-slider"
-          type="range"
-          min="-1"
-          max="1"
-          step="0.01"
-          value={k}
-          onChange={(e) => setK(parseFloat(e.target.value))}
-          className="flex-1"
-        />
-      </div>
     </div>
   );
 };
@@ -263,23 +285,16 @@ export const B1 = () => {
   }, [k]);
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      <canvas ref={canvasRef} className="border rounded-lg shadow-sm" />
-      <div className="flex items-center space-x-3 w-full max-w-xs">
-        <label htmlFor="b1-k" className="text-sm font-medium">
-          k = {k.toFixed(2)}
-        </label>
-        <input
-          id="b1-k"
-          type="range"
-          min="-0.8"
-          max="0.8"
-          step="0.01"
-          value={k}
-          onChange={(e) => setK(parseFloat(e.target.value))}
-          className="flex-1"
-        />
-      </div>
+    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} className="max-w-full max-h-full" />
+      <ControlPanel
+        label="k ="
+        value={k}
+        min={-0.8}
+        max={0.8}
+        step={0.01}
+        onChange={setK}
+      />
     </div>
   );
 };
@@ -420,23 +435,16 @@ export const B2 = () => {
   }, [k]);
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      <canvas ref={canvasRef} className="border rounded-lg shadow-sm" />
-      <div className="flex items-center space-x-3 w-full max-w-xs">
-        <label htmlFor="b2-k" className="text-sm font-medium">
-          k = {k.toFixed(2)}
-        </label>
-        <input
-          id="b2-k"
-          type="range"
-          min="-0.8"
-          max="0.8"
-          step="0.01"
-          value={k}
-          onChange={(e) => setK(parseFloat(e.target.value))}
-          className="flex-1"
-        />
-      </div>
+    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} className="max-w-full max-h-full" />
+      <ControlPanel
+        label="k ="
+        value={k}
+        min={-0.8}
+        max={0.8}
+        step={0.01}
+        onChange={setK}
+      />
     </div>
   );
 };
@@ -613,23 +621,16 @@ void main() {
   }, [k]);
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      <canvas ref={canvasRef} className="border rounded-lg shadow-sm" />
-      <div className="flex items-items-center space-x-3 w-full max-w-xs">
-        <label htmlFor="c1-k" className="text-sm font-medium">
-          known k = {k.toFixed(2)}
-        </label>
-        <input
-          id="c1-k"
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={k}
-          onChange={(e) => setK(parseFloat(e.target.value))}
-          className="flex-1"
-        />
-      </div>
+    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
+      <ControlPanel
+        label="known k ="
+        value={k}
+        min={0}
+        max={1}
+        step={0.01}
+        onChange={setK}
+      />
     </div>
   );
 };
