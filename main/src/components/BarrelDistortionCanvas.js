@@ -74,13 +74,11 @@ export const A1 = () => {
     const resize = () => {
       const parent = canvas.parentElement;
       if (!parent) return;
-      const size = Math.min(parent.clientWidth, parent.clientHeight * 0.9);
-      canvas.width = size;
-      canvas.height = size;
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientWidth;
     };
     resize();
-    const onResize = () => resize();
-    window.addEventListener("resize", onResize);
+    window.addEventListener("resize", resize);
 
     const draw = () => {
       const w = canvas.width;
@@ -154,14 +152,14 @@ export const A1 = () => {
     const id = setInterval(draw, 60); // smooth animation when k changes
 
     return () => {
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", resize);
       clearInterval(id);
     };
   }, [k]);
 
   return (
-    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
-      <canvas ref={canvasRef} className="max-w-full max-h-full" />
+    <div className="relative w-full h-full bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} />
       <ControlPanel
         label="k ="
         value={k}
@@ -246,9 +244,8 @@ export const B1 = () => {
     const resize = () => {
       const parent = canvas.parentElement;
       if (!parent) return;
-      const sz = Math.min(parent.clientWidth, parent.clientHeight * 0.9);
-      canvas.width = sz;
-      canvas.height = sz;
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientWidth;
     };
     resize();
     window.addEventListener("resize", resize);
@@ -285,8 +282,8 @@ export const B1 = () => {
   }, [k]);
 
   return (
-    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
-      <canvas ref={canvasRef} className="max-w-full max-h-full" />
+    <div className="relative w-full h-full bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} />
       <ControlPanel
         label="k ="
         value={k}
@@ -396,9 +393,8 @@ export const B2 = () => {
     const resize = () => {
       const parent = canvas.parentElement;
       if (!parent) return;
-      const sz = Math.min(parent.clientWidth, parent.clientHeight * 0.9);
-      canvas.width = sz;
-      canvas.height = sz;
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientWidth;
     };
     resize();
     window.addEventListener("resize", resize);
@@ -435,8 +431,8 @@ export const B2 = () => {
   }, [k]);
 
   return (
-    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
-      <canvas ref={canvasRef} className="max-w-full max-h-full" />
+    <div className="relative w-full h-full bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} />
       <ControlPanel
         label="k ="
         value={k}
@@ -581,9 +577,8 @@ void main() {
     const resize = () => {
       const parent = canvas.parentElement;
       if (!parent) return;
-      const sz = Math.min(parent.clientWidth, parent.clientHeight * 0.9);
-      canvas.width = sz;
-      canvas.height = sz;
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientWidth;
     };
     resize();
     window.addEventListener("resize", resize);
@@ -621,8 +616,8 @@ void main() {
   }, [k]);
 
   return (
-    <div className="relative w-full h-screen bg-gray-950 flex items-center justify-center overflow-hidden">
-      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
+    <div className="relative w-full h-full bg-gray-950 flex items-center justify-center overflow-hidden">
+      <canvas ref={canvasRef} />
       <ControlPanel
         label="known k ="
         value={k}
