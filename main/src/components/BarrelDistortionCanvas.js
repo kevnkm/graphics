@@ -28,35 +28,53 @@ const createProgram = (gl, vs, fs) => {
 /* -------------------------------------------------------------------------- */
 /*                            IN-CANVAS CONTROL PANEL                          */
 /* -------------------------------------------------------------------------- */
-const ControlPanel = ({ label, value, min, max, step, onChange }) => (
-  <div
-    className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto
-                  flex items-center gap-5 px-8 py-4 bg-white rounded-full shadow-2xl
-                  select-none z-10"
-  >
-    <span className="text-gray-800 font-medium text-sm min-w-[100px] text-right">
-      {label} {value.toFixed(2)}
-    </span>
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="w-64 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer
-                 [&::-webkit-slider-thumb]:appearance-none
-                 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5
-                 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600
-                 [&::-webkit-slider-thumb]:shadow-md"
-      style={{
-        background: `linear-gradient(to right, #3b3e5fc ${
-          ((value - min) / (max - min)) * 100
-        }%, #e0e0e0 ${((value - min) / (max - min)) * 100}%)`,
-      }}
-    />
-  </div>
-);
+const ControlPanel = ({ label, value, min, max, step, onChange }) => {
+  const percentage = ((value - min) / (max - min)) * 100;
+
+  return (
+    <div
+      className="absolute bottom-8 left-1/2 -translate-x-1/2 
+                  pointer-events-auto z-10
+                  flex items-center gap-4 
+                  px-6 py-3.5                /* thinner padding */
+                  bg-white 
+                  rounded-full 
+                  shadow-xl 
+                  select-none"
+    >
+      {/* Label + Value */}
+      <div className="flex items-baseline gap-2 whitespace-nowrap pr-2">
+        <span className="text-gray-800 font-medium text-sm">{label}</span>
+        <span className="text-blue-600 font-semibold text-base min-w-[56px] text-right">
+          {value.toFixed(2)}
+        </span>
+      </div>
+
+      {/* Slider */}
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="flex-1 h-2 bg-gray-200 rounded-full appearance-none cursor-pointer
+                   focus:outline-none
+                   [&::-webkit-slider-thumb]:appearance-none
+                   [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5
+                   [&::-webkit-slider-thumb]:rounded-full
+                   [&::-webkit-slider-thumb]:bg-blue-600
+                   [&::-webkit-slider-thumb]:shadow-md
+                   [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white"
+        style={{
+          background: `linear-gradient(to right, 
+            #3b82f6 0%, #3b82f6 ${percentage}%, 
+            #e5e7eb ${percentage}%, #e5e7eb 100%)`,
+        }}
+      />
+    </div>
+  );
+};
 
 /* -------------------------------------------------------------------------- */
 /*                                   A1 – 2D CANVAS                           */
