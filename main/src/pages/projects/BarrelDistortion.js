@@ -4,14 +4,6 @@ import * as BarrelDistortionCanvas from "../../components/BarrelDistortionCanvas
 
 const componentGroupList = [
   {
-    groupName: "2D Image Distortion",
-    description:
-      "Apply real-time barrel or pincushion distortion to a 2D image. Positive distortion values create a fisheye-like barrel effect; negative values produce pincushion distortion. Control the strength with an interactive slider.",
-    components: {
-      A1: () => <BarrelDistortionCanvas.A1 />,
-    },
-  },
-  {
     groupName: "Shader-Based Distortion",
     description: (
       <>
@@ -26,25 +18,15 @@ const componentGroupList = [
       </>
     ),
     components: {
-      B1: () => <BarrelDistortionCanvas.B1 />,
-      B2: () => <BarrelDistortionCanvas.B2 />,
-    },
-  },
-  {
-    groupName: "Correcting Lens Distortion",
-    description:
-      "Demonstrates how to correct barrel-distorted images (e.g., from wide-angle lenses) back to rectilinear projection using inverse mapping. Essential technique in computer vision and photography.",
-    components: {
-      C1: () => <BarrelDistortionCanvas.C1 />,
+      A1: () => <BarrelDistortionCanvas.A1 />,
+      A2: () => <BarrelDistortionCanvas.A2 />,
     },
   },
 ];
 
 function BarrelDistortion() {
   const [activeTabs, setActiveTabs] = useState({
-    "2D Image Distortion": "A1",
-    "Shader-Based Distortion": "B1",
-    "Correcting Lens Distortion": "C1",
+    "Shader-Based Distortion": "A1",
   });
 
   const handleTabChange = (groupName, tab) => {
