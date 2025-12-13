@@ -3,10 +3,10 @@
 import React from "react";
 import { useState } from "react";
 import { Voronoi2D } from "../../components/Voronoi2D";
+import { Mandelbrot, Julia } from "../../components/Fractals2D";
+import { WaterTexture } from "../../components/Water";
 import { Fire2D } from "../../components/Fire2D";
 import { Smoke2D } from "../../components/Smoke2D";
-import { Mandelbrot1, Mandelbrot2 } from "../../components/Fractals2D";
-import { WaterTexture } from "../../components/Water";
 
 const componentGroupList = [
   {
@@ -22,6 +22,26 @@ const componentGroupList = [
     ),
     components: {
       A1: () => <Voronoi2D />,
+    },
+  },
+  {
+    groupName: "Fractals",
+    description: <>Interactive Mandelbrot and Julia sets.</>,
+    components: {
+      D1: () => <Mandelbrot />,
+      D2: () => <Julia />,
+    },
+  },
+  {
+    groupName: "Water",
+    description: (
+      <>
+        A stylised water surface using a summed sine-wave height field, fake
+        refraction and Fresnel term. Move the mouse to tilt the view.
+      </>
+    ),
+    components: {
+      E1: () => <WaterTexture />,
     },
   },
   {
@@ -46,31 +66,6 @@ const componentGroupList = [
     ),
     components: {
       C2: () => <Smoke2D />,
-    },
-  },
-  {
-    groupName: "Fractals",
-    description: (
-      <>
-        Interactive Mandelbrot and Julia sets. Drag the mouse to zoom / pan
-        (Mandelbrot) or to change the complex constant *c* (Julia).
-      </>
-    ),
-    components: {
-      D1: () => <Mandelbrot1 />,
-      D2: () => <Mandelbrot2 />,
-    },
-  },
-  {
-    groupName: "Water",
-    description: (
-      <>
-        A stylised water surface using a summed sine-wave height field, fake
-        refraction and Fresnel term. Move the mouse to tilt the view.
-      </>
-    ),
-    components: {
-      E1: () => <WaterTexture />,
     },
   },
   // {
