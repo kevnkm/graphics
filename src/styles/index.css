@@ -1,31 +1,30 @@
-
 /* ─── Design Tokens ──────────────────────────────────────────────────────── */
 
 :root {
-  --bg-base:        #0a0a0f;
-  --bg-surface:     #111118;
-  --bg-elevated:    #18181f;
-  --bg-border:      #272733;
+  --bg-base: #0a0a0f;
+  --bg-surface: #111118;
+  --bg-elevated: #18181f;
+  --bg-border: #272733;
 
-  --text-primary:   #f0f0f8;
+  --text-primary: #f0f0f8;
   --text-secondary: #9090aa;
-  --text-muted:     #55556a;
+  --text-muted: #55556a;
 
   --accent-primary: #7c6bff;
-  --accent-glow:    rgba(124, 107, 255, 0.25);
-  --accent-dim:     rgba(124, 107, 255, 0.12);
+  --accent-glow: rgba(124, 107, 255, 0.25);
+  --accent-dim: rgba(124, 107, 255, 0.12);
 
-  --accent-green:   #00e5a0;
-  --accent-cyan:    #00d4e5;
-  --accent-orange:  #ff8a4c;
+  --accent-green: #00e5a0;
+  --accent-cyan: #00d4e5;
+  --accent-orange: #ff8a4c;
 
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-xl: 24px;
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 24px var(--accent-glow);
 
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -35,13 +34,16 @@
 }
 
 /* ─── Reset & Base ───────────────────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   overflow-x: hidden;
 }
@@ -61,14 +63,21 @@ body {
 }
 
 /* ─── Typography ─────────────────────────────────────────────────────────── */
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-sans);
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
 
-code, pre, .mono {
+code,
+pre,
+.mono {
   font-family: var(--font-mono);
 }
 
@@ -108,7 +117,9 @@ a:hover {
 }
 
 /* ─── Utility Classes ────────────────────────────────────────────────────── */
-.font-mono { font-family: var(--font-mono); }
+.font-mono {
+  font-family: var(--font-mono);
+}
 
 .text-gradient {
   background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-cyan) 100%);
@@ -131,18 +142,37 @@ a:hover {
 
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 12px var(--accent-glow); }
-  50%       { box-shadow: 0 0 28px var(--accent-glow); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 12px var(--accent-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 28px var(--accent-glow);
+  }
 }
 
 .animate-fade-up {
@@ -153,22 +183,40 @@ a:hover {
   animation: fade-in 0.3s ease forwards;
 }
 
-/* ─── Nav ────────────────────────────────────────────────────────────────── */
-.nav-blur {
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  background: rgba(10, 10, 15, 0.85);
-  border-bottom: 1px solid var(--bg-border);
+/* ─── Media Queries ──────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  :root {
+    --nav-height: 52px;
+  }
+
+  body {
+    font-size: 0.95rem;
+  }
+
+  .nav-hide-mobile {
+    display: none !important;
+  }
+
+  .nav-mobile-gap {
+    gap: 0.75rem !important;
+  }
+
+  .hero-padding {
+    padding: 3.5rem 1.25rem 2.5rem !important;
+  }
+
+  .page-padding {
+    padding-top: calc(var(--nav-height) + 1.25rem) !important;
+    padding-bottom: 2.5rem !important;
+  }
 }
 
-/* ─── Noise grain overlay ────────────────────────────────────────────────── */
-.grain::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
+@media (max-width: 480px) {
+  h1 {
+    font-size: 2rem !important;
+  }
+
+  h2 {
+    font-size: 1.15rem !important;
+  }
 }

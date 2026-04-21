@@ -18,7 +18,7 @@ function ProjectPageLayout({ title, intro, groups, defaultTabs }) {
 
   return (
     <div
-      className="grain"
+      className="grain page-padding"
       style={{
         minHeight: "100vh",
         paddingTop: "calc(var(--nav-height) + 2rem)",

@@ -69,6 +69,7 @@ function Home() {
     >
       {/* ── Hero ──────────────────────────────────────────────────── */}
       <section
+        className="hero-padding"
         style={{
           textAlign: "center",
           padding: "5rem 1.5rem 3.5rem",
@@ -167,7 +168,7 @@ function Home() {
           margin: "0 auto",
           padding: "0 1.5rem 5rem",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
           gap: "1rem",
         }}
       >
