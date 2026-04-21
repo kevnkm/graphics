@@ -196,6 +196,7 @@ precision highp float;
 uniform vec2  u_resolution;
 uniform float u_time;
 uniform vec2  u_mouse;
+uniform vec2  u_drag;
 
 const int   MAX_STEPS = 120;
 const float MAX_DIST  = 30.0;
@@ -297,8 +298,8 @@ void main() {
   vec2 uv = (gl_FragCoord.xy - 0.5*u_resolution) / u_resolution.y;
 
   // Mouse orbit (yaw + limited pitch)
-  float yaw   =  u_mouse.x * 2.2;
-  float pitch = -u_mouse.y * 0.9;
+  float yaw   =  u_drag.x * 2.2;
+  float pitch = -u_drag.y * 1.5;
   mat3 cam    = rotX(pitch) * rotY(yaw);
 
   vec3 ro  = cam * vec3(0., 0., -5.5);
@@ -362,7 +363,7 @@ export function B1() {
         fontFamily: "var(--font-mono)", fontSize: "0.68rem",
         color: "rgba(255,255,255,0.35)", pointerEvents: "none",
       }}>
-        move mouse to orbit camera
+        drag to orbit camera
       </div>
     </div>
   );

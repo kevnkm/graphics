@@ -309,6 +309,7 @@ precision highp float;
 uniform vec2  u_resolution;
 uniform float u_time;
 uniform vec2  u_mouse;
+uniform vec2  u_drag;
 
 // ── Sphere intersection ────────────────────────────────────────────
 float hitSphere(vec3 ro, vec3 rd, vec3 c, float r) {
@@ -378,8 +379,8 @@ void main() {
   vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
 
   // Mouse-orbit camera
-  float yaw   =  u_mouse.x * 2.5 + u_time * 0.07;
-  float pitch = -u_mouse.y * 0.8 - 0.15;
+  float yaw   =  u_drag.x * 2.5 + u_time * 0.05;
+  float pitch = -u_drag.y * 1.5 - 0.15;
   float dist  = 3.8;
   vec3 ro = rotY(yaw) * vec3(0.0, sin(pitch)*dist, cos(pitch)*dist);
   vec3 target = vec3(0.0, 0.1, 0.0);
@@ -390,14 +391,23 @@ void main() {
 
   // ── Primary hit ─────────────────────────────────────────────────
   float tMin = 1e9; int iHit = -2; // -2 = sky, -1 = ground
-  vec3 nor, alb; float roughness;
+  vec3 hitNor, hitAlb; float hitRough;
 
   float tp = hitPlane(ro, rd);
-  if (tp > 0.0) { tMin = tp; iHit = -1; }
+  if (tp > 0.0) { 
+      tMin = tp; iHit = -1;
+      hitNor = vec3(0.0, 1.0, 0.0);
+      hitRough = 0.9;
+  }
 
   for (int i = 0; i < N; i++) {
     float t = hitSphere(ro, rd, centers[i], radii[i]);
-    if (t > 0.0 && t < tMin) { tMin = t; iHit = i; }
+    if (t > 0.0 && t < tMin) { 
+        tMin = t; iHit = i; 
+        hitNor = centers[i]; // Store center temporarily
+        hitAlb = albedo[i];
+        hitRough = rough[i];
+    }
   }
 
   vec3 col;
@@ -407,44 +417,51 @@ void main() {
     vec3 hit = ro + rd * tMin;
     if (iHit == -1) {
       // Checkerboard ground
-      nor = vec3(0,1,0);
       float chk = mod(floor(hit.x * 2.0) + floor(hit.z * 2.0), 2.0);
-      alb = mix(vec3(0.75), vec3(0.45), chk);
-      roughness = 0.9;
+      hitAlb = mix(vec3(0.75), vec3(0.45), chk);
+      // hitNor is already vec3(0,1,0)
     } else {
-      nor = normalize(hit - centers[iHit]);
-      alb = albedo[iHit];
-      roughness = rough[iHit];
+      hitNor = normalize(hit - hitNor); // compute real normal from center
     }
-    col = shade(ro, rd, hit, nor, alb, roughness);
+    col = shade(ro, rd, hit, hitNor, hitAlb, hitRough);
 
     // ── Mirror reflection (one bounce for low-roughness surfaces) ──
-    if (roughness < 0.15) {
-      vec3 rrd = reflect(rd, nor);
-      vec3 rro = hit + nor * 0.003;
+    if (hitRough < 0.15) {
+      vec3 rrd = reflect(rd, hitNor);
+      vec3 rro = hit + hitNor * 0.003;
       float t2 = 1e9; int i2 = -2;
+      vec3 rn, ra; float rrough;
+
       float tp2 = hitPlane(rro, rrd);
-      if (tp2 > 0.0) { t2 = tp2; i2 = -1; }
+      if (tp2 > 0.0) { 
+          t2 = tp2; i2 = -1;
+          rn = vec3(0.0, 1.0, 0.0);
+          rrough = 0.9;
+      }
       for (int j = 0; j < N; j++) {
         float ts = hitSphere(rro, rrd, centers[j], radii[j]);
-        if (ts > 0.0 && ts < t2) { t2 = ts; i2 = j; }
+        if (ts > 0.0 && ts < t2) { 
+            t2 = ts; i2 = j; 
+            rn = centers[j];
+            ra = albedo[j];
+            rrough = rough[j];
+        }
       }
+      
       vec3 rcol;
       if (i2 == -2) {
         rcol = skyColor(rrd);
       } else {
         vec3 rh = rro + rrd * t2;
-        vec3 rn; vec3 ra; float rrough;
         if (i2 == -1) {
-          rn = vec3(0,1,0);
-          float chk2 = mod(floor(rh.x*2.)+floor(rh.z*2.), 2.);
-          ra = mix(vec3(0.75), vec3(0.45), chk2); rrough = 0.9;
+          float chk2 = mod(floor(rh.x*2.0)+floor(rh.z*2.0), 2.0);
+          ra = mix(vec3(0.75), vec3(0.45), chk2); 
         } else {
-          rn = normalize(rh - centers[i2]); ra = albedo[i2]; rrough = rough[i2];
+          rn = normalize(rh - rn); 
         }
         rcol = shade(rro, rrd, rh, rn, ra, rrough);
       }
-      float reflectance = 1.0 - roughness * roughness;
+      float reflectance = 1.0 - hitRough * hitRough;
       col = mix(col, rcol, reflectance * 0.85);
     }
 
@@ -470,7 +487,7 @@ export function C1() {
         fontFamily: "var(--font-mono)", fontSize: "0.68rem",
         color: "rgba(255,255,255,0.35)", pointerEvents: "none",
       }}>
-        move mouse to orbit · auto-rotates
+        drag to orbit · auto-rotates
       </div>
     </div>
   );

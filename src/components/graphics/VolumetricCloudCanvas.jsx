@@ -9,6 +9,7 @@ precision highp float;
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2 u_mouse;
+uniform vec2 u_drag;
 
 // High quality Hash
 float hash(vec3 p) {
@@ -70,7 +71,7 @@ void main() {
     vec2 p = (gl_FragCoord.xy * 2.0 - u_resolution.xy) / min(u_resolution.x, u_resolution.y);
     
     // Mouse setup for camera
-    vec2 mo = u_mouse * 3.14159;
+    vec2 mo = u_drag * 1.5;
 
     // Camera
     vec3 ro = vec3(0.0, 2.0, 0.0); 
@@ -166,7 +167,7 @@ export function A1() {
                 color: "rgba(255,255,255,0.4)", pointerEvents: "none",
                 textShadow: "0 1px 3px rgba(0,0,0,0.8)"
             }}>
-                move mouse to tilt view
+                drag to look around
             </div>
         </div>
     );

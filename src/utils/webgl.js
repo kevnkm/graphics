@@ -78,6 +78,7 @@ export function useWebGL(fragmentSource, { onSetup, onFrame, onMouse } = {}) {
       u_resolution: gl.getUniformLocation(prog, "u_resolution"),
       u_time:       gl.getUniformLocation(prog, "u_time"),
       u_mouse:      gl.getUniformLocation(prog, "u_mouse"),
+      u_drag:       gl.getUniformLocation(prog, "u_drag"),
     };
 
     // Resize helper — makes canvas square to parent width
@@ -90,19 +91,57 @@ export function useWebGL(fragmentSource, { onSetup, onFrame, onMouse } = {}) {
     resize();
     window.addEventListener("resize", resize);
 
+    // Prevent default scroll on touch
+    canvas.style.touchAction = "none";
+
     // Let the caller add extra uniform locations / state
     let extraCleanup;
     if (onSetup) extraCleanup = onSetup(gl, prog, locs);
 
-    // Mouse tracking
+    // Mouse & Drag tracking
     const mouseState = { x: 0, y: 0 };
-    const handleMouse = (e) => {
+    const dragState  = { x: 0, y: 0, isDragging: false, lastX: 0, lastY: 0 };
+
+    const getCoords = (clientX, clientY) => {
       const r = canvas.getBoundingClientRect();
-      mouseState.x = ((e.clientX - r.left) / canvas.width) * 2 - 1;
-      mouseState.y = -(((e.clientY - r.top) / canvas.height) * 2 - 1);
+      return {
+        x: ((clientX - r.left) / canvas.width) * 2 - 1,
+        y: -(((clientY - r.top) / canvas.height) * 2 - 1)
+      };
+    };
+
+    const handlePointerDown = (e) => {
+      dragState.isDragging = true;
+      const pts = e.touches ? e.touches[0] : e;
+      const c = getCoords(pts.clientX, pts.clientY);
+      mouseState.x = c.x; mouseState.y = c.y;
+      dragState.lastX = c.x; dragState.lastY = c.y;
+    };
+
+    const handlePointerMove = (e) => {
+      // For touch events, e.touches might be empty on end, but move will have it
+      const pts = e.touches ? e.touches[0] : e;
+      if (!pts) return;
+      const c = getCoords(pts.clientX, pts.clientY);
+      mouseState.x = c.x; mouseState.y = c.y;
+      
+      if (dragState.isDragging) {
+        dragState.x -= (c.x - dragState.lastX) * 2.0; // Reversed for natural pan feeling
+        dragState.y += (c.y - dragState.lastY) * 2.0;
+        dragState.lastX = c.x; dragState.lastY = c.y;
+      }
       if (onMouse) onMouse(e, canvas, mouseState);
     };
-    canvas.addEventListener("mousemove", handleMouse);
+
+    const handlePointerUp = () => { dragState.isDragging = false; };
+
+    canvas.addEventListener("mousedown", handlePointerDown);
+    canvas.addEventListener("mousemove", handlePointerMove);
+    window.addEventListener("mouseup",   handlePointerUp);
+    
+    canvas.addEventListener("touchstart", handlePointerDown, { passive: true });
+    canvas.addEventListener("touchmove",  handlePointerMove, { passive: true });
+    window.addEventListener("touchend",   handlePointerUp);
 
     // rAF render loop
     const start = performance.now();
@@ -118,6 +157,7 @@ export function useWebGL(fragmentSource, { onSetup, onFrame, onMouse } = {}) {
       if (locs.u_resolution) gl.uniform2f(locs.u_resolution, canvas.width, canvas.height);
       if (locs.u_time)       gl.uniform1f(locs.u_time, t);
       if (locs.u_mouse)      gl.uniform2f(locs.u_mouse, mouseState.x, mouseState.y);
+      if (locs.u_drag)       gl.uniform2f(locs.u_drag, dragState.x, dragState.y);
       if (onFrame) onFrame(gl, prog, locs, t);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       raf = requestAnimationFrame(loop);
@@ -127,7 +167,12 @@ export function useWebGL(fragmentSource, { onSetup, onFrame, onMouse } = {}) {
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
-      canvas.removeEventListener("mousemove", handleMouse);
+      canvas.removeEventListener("mousedown", handlePointerDown);
+      canvas.removeEventListener("mousemove", handlePointerMove);
+      window.removeEventListener("mouseup",   handlePointerUp);
+      canvas.removeEventListener("touchstart", handlePointerDown);
+      canvas.removeEventListener("touchmove",  handlePointerMove);
+      window.removeEventListener("touchend",   handlePointerUp);
       if (extraCleanup) extraCleanup();
       gl.deleteProgram(prog);
       gl.deleteShader(vs);
