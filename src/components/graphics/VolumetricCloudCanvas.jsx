@@ -1,263 +1,159 @@
-import React, { useRef, useEffect } from "react";
+/**
+ * VolumetricCloudCanvas.jsx — Real-time volumetric cloud via ray marching.
+ * Uses the shared useWebGL hook; zero boilerplate.
+ */
+import { useWebGL } from "../../utils/webgl";
 
-const cloudVertexShaderSource = `
-  attribute vec4 a_position;
-  varying vec2 v_uv;
-  void main() {
-    gl_Position = a_position;
-    v_uv = (a_position.xy + 1.0) * 0.5;
+const CLOUD_FS = `
+precision highp float;
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform vec2  u_mouse;
+
+// ── Hash / noise ───────────────────────────────────────────────────
+float hash(vec3 p) {
+  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
+float valueNoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash(i),             hash(i+vec3(1,0,0)), f.x),
+        mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
+    mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x),
+        mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y), f.z);
+}
+
+// Worley-style nearest-cell distance
+float worley(vec3 p) {
+  vec3 i = floor(p);
+  float minD = 1e9;
+  for (int x=-1; x<=1; x++)
+  for (int y=-1; y<=1; y++)
+  for (int z=-1; z<=1; z++) {
+    vec3 cell = i + vec3(x,y,z);
+    vec3 pt   = cell + 0.5 + 0.45 * (2.0*vec3(hash(cell),
+                                                hash(cell+vec3(7,3,5)),
+                                                hash(cell+vec3(11,17,2)))-1.0);
+    minD = min(minD, distance(p, pt));
   }
+  return minD;
+}
+
+// 4-octave FBM combining value noise + worley for clumpy look
+float cloudFBM(vec3 p) {
+  float v = 0.0, a = 0.5;
+  vec3 q = p;
+  for (int i = 0; i < 4; i++) {
+    float vn = valueNoise(q);
+    float wo = 1.0 - worley(q * 0.7);
+    v += a * mix(vn, vn * wo, 0.6);
+    q  = q * 2.1 + vec3(1.7, 9.2, 3.5);
+    a *= 0.5;
+  }
+  return v;
+}
+
+// Cloud density at world position p
+float cloudDensity(vec3 p) {
+  // Slow drift
+  vec3 sp = p * 1.2 + vec3(0, 0, u_time * 0.06);
+  float n = cloudFBM(sp);
+  // Bounding sphere falloff
+  float r = length(p);
+  float falloff = smoothstep(1.0, 0.55, r);
+  float d = n - 0.38;                // threshold: higher = thinner cloud
+  return max(0.0, d) * falloff * 2.5;
+}
+
+// Cheap self-shadow march towards sun
+float lightMarch(vec3 pos, vec3 sunDir) {
+  float shadow = 0.0;
+  float t = 0.0;
+  for (int i = 0; i < 8; i++) {
+    shadow += cloudDensity(pos + sunDir * t) * 0.12;
+    t += 0.12;
+  }
+  return exp(-shadow * 3.5);
+}
+
+void main() {
+  vec2 uv  = (gl_FragCoord.xy / u_resolution.xy) * 2.0 - 1.0;
+  uv.x    *= u_resolution.x / u_resolution.y;
+
+  // Mouse-driven camera tilt
+  vec3 ro  = vec3(0.0, 0.0, -2.5);
+  vec3 rd  = normalize(vec3(uv + u_mouse * 0.3, 1.6));
+
+  // ── Sphere intersection ──────────────────────────────────────────
+  float a = dot(rd, rd);
+  float b = 2.0 * dot(ro, rd);
+  float c = dot(ro, ro) - 1.0;
+  float disc = b*b - 4.0*a*c;
+
+  // Sky background
+  vec3 sky = mix(vec3(0.55, 0.70, 0.95), vec3(0.28, 0.48, 0.80),
+                 clamp(rd.y * 0.5 + 0.5, 0.0, 1.0));
+
+  if (disc < 0.0) { gl_FragColor = vec4(sky, 1.0); return; }
+
+  float t0 = (-b - sqrt(disc)) / (2.0*a);
+  float t1 = (-b + sqrt(disc)) / (2.0*a);
+  if (t1 < 0.0) { gl_FragColor = vec4(sky, 1.0); return; }
+  t0 = max(t0, 0.0);
+
+  // ── Volume ray march ─────────────────────────────────────────────
+  int STEPS = 48;
+  float stepSize = (t1 - t0) / float(STEPS);
+  vec3 sunDir  = normalize(vec3(1.2, 1.0, 0.5));
+  vec3 sunCol  = vec3(1.0, 0.95, 0.80);
+  vec3 skyCol  = vec3(0.60, 0.75, 1.00);
+
+  float transmit = 1.0;
+  vec3  accum    = vec3(0.0);
+
+  for (int i = 0; i < 48; i++) {
+    if (float(i) >= float(STEPS) || transmit < 0.005) break;
+    float t   = t0 + (float(i) + 0.5) * stepSize;
+    vec3  pos = ro + rd * t;
+    float d   = cloudDensity(pos);
+    if (d <= 0.0) continue;
+
+    float alpha = 1.0 - exp(-d * stepSize * 4.0);
+    float lit   = lightMarch(pos, sunDir);
+    // Two-term scattering: forward sun + ambient sky
+    vec3  scat  = sunCol * lit + skyCol * 0.25;
+
+    // Mie scattering phase: back-lit glow
+    float cosA = dot(rd, sunDir);
+    float phase = 0.75 * (1.0 + cosA * cosA);
+    scat *= phase;
+
+    accum   += scat * alpha * transmit;
+    transmit *= 1.0 - alpha;
+  }
+
+  vec3 col = sky * transmit + accum;
+  // Tone-map: simple ACES approximation
+  col = col * (col + 0.0245786) / (col * (0.983729 * col + 0.4329510) + 0.238081);
+
+  gl_FragColor = vec4(col, 1.0);
+}
 `;
 
-const cloudFragmentShaderSource = `
-  precision highp float;
-  varying vec2 v_uv;
-  
-  uniform float u_time;
-  uniform vec3 u_sunDirection;
-  uniform float u_noiseScale;
-  uniform float u_cloudDensity;
-  uniform float u_softEdges;
-  uniform float u_shadowIntensity;
-  uniform float u_stepCount;
-  uniform float u_fadeDistance;
-
-  float hash(vec3 p) {
-    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-  }
-
-  float noise(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(mix(hash(i + vec3(0,0,0)), hash(i + vec3(1,0,0)), f.x),
-          mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
-      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
-          mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
-  }
-
-  float fbm(vec3 p) {
-    float v = 0.0;
-    float a = 0.5;
-    vec3 shift = vec3(100.0);
-    for (int i = 0; i < 4; ++i) {
-      v += a * noise(p);
-      p = p * 2.0 + shift;
-      a *= 0.5;
-    }
-    return v;
-  }
-
-  float getCloudDensity(vec3 p) {
-    float baseNoise = fbm(p * u_noiseScale + u_time * 0.1);
-    float density = baseNoise * u_cloudDensity;
-    float dist = length(p - vec3(0.0));
-    float falloff = smoothstep(1.0, 1.0 - u_softEdges, dist);
-    density *= falloff;
-    return max(0.0, density - 0.1);
-  }
-
-  float calculateLight(vec3 pos) {
-    vec3 lightDir = normalize(u_sunDirection);
-    float stepSize = 0.1;
-    float density = 0.0;
-    float t = 0.0;
-    
-    for (int i = 0; i < 6; i++) {
-      vec3 samplePos = pos + lightDir * t;
-      density += getCloudDensity(samplePos) * stepSize;
-      t += stepSize;
-      if (density > 1.0) break;
-    }
-    
-    return exp(-density * u_shadowIntensity);
-  }
-
-  void main() {
-    vec3 rayOrigin = vec3(0.0, 0.0, -2.0);
-    vec3 rayDir = normalize(vec3(v_uv * 2.0 - 1.0, 1.0));
-    
-    float sphereRadius = 1.0;
-    vec3 sphereCenter = vec3(0.0);
-    
-    vec3 oc = rayOrigin - sphereCenter;
-    float a = dot(rayDir, rayDir);
-    float b = 2.0 * dot(oc, rayDir);
-    float c = dot(oc, oc) - sphereRadius * sphereRadius;
-    float discriminant = b * b - 4.0 * a * c;
-    
-    if (discriminant < 0.0) {
-      gl_FragColor = vec4(0.2, 0.5, 0.8, 1.0);
-      return;
-    }
-
-    float t0 = (-b - sqrt(discriminant)) / (2.0 * a);
-    float t1 = (-b + sqrt(discriminant)) / (2.0 * a);
-    
-    float stepSize = (t1 - t0) / u_stepCount;
-    float t = t0;
-    vec4 color = vec4(0.0);
-    float transmittance = 1.0;
-    
-    // Use a fixed maximum iteration count
-    const float maxSteps = 64.0;
-    float stepsToTake = min(u_stepCount, maxSteps);
-    
-    for (int i = 0; i < int(maxSteps); i++) {
-      if (float(i) >= stepsToTake) break;
-      if (t >= t1 || transmittance < 0.01) break;
-      
-      vec3 pos = rayOrigin + rayDir * t;
-      float density = getCloudDensity(pos);
-      
-      if (density > 0.0) {
-        float light = calculateLight(pos);
-        vec3 cloudColor = vec3(1.0) * light + vec3(0.8, 0.9, 1.0) * 0.2;
-        float alpha = 1.0 - exp(-density * stepSize);
-        
-        color.rgb += cloudColor * alpha * transmittance;
-        color.a += alpha * transmittance;
-        transmittance *= 1.0 - alpha;
-      }
-      
-      t += stepSize;
-    }
-    
-    vec3 skyColor = vec3(0.2, 0.5, 0.8);
-    gl_FragColor = vec4(mix(skyColor, color.rgb, color.a), 1.0);
-  }
-`;
-
-const createShader = (gl, type, source) => {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (!success) {
-    console.error(`Shader compilation failed: ${gl.getShaderInfoLog(shader)}`);
-    gl.deleteShader(shader);
-    return null;
-  }
-  return shader;
-};
-
-const createProgram = (gl, vertexShader, fragmentShader) => {
-  if (!vertexShader || !fragmentShader) {
-    console.error("One or both shaders are invalid");
-    return null;
-  }
-  const program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  const success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (!success) {
-    console.error(`Program linking failed: ${gl.getProgramInfoLog(program)}`);
-    gl.deleteProgram(program);
-    return null;
-  }
-  return program;
-};
-
-export const A1 = () => {
-  const canvasRef = useRef(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      cloudVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      cloudFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) {
-      console.error("Failed to create program");
-      return;
-    }
-
-    const positionBuffer = gl.createBuffer();
-    const positions = new Float32Array([
-      -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
-    ]);
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-    const positionLocation = gl.getAttribLocation(program, "a_position");
-
-    const uniforms = {
-      time: gl.getUniformLocation(program, "u_time"),
-      sunDirection: gl.getUniformLocation(program, "u_sunDirection"),
-      noiseScale: gl.getUniformLocation(program, "u_noiseScale"),
-      cloudDensity: gl.getUniformLocation(program, "u_cloudDensity"),
-      softEdges: gl.getUniformLocation(program, "u_softEdges"),
-      shadowIntensity: gl.getUniformLocation(program, "u_shadowIntensity"),
-      stepCount: gl.getUniformLocation(program, "u_stepCount"),
-      fadeDistance: gl.getUniformLocation(program, "u_fadeDistance"),
-    };
-
-    const resize = () => {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-    };
-
-    let time = 0;
-    let isMounted = true;
-    let animationFrameId;
-
-    const animate = () => {
-      if (!isMounted) return;
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-
-      if (uniforms.time) gl.uniform1f(uniforms.time, time);
-      if (uniforms.sunDirection)
-        gl.uniform3f(uniforms.sunDirection, 1.0, 1.0, 0.5);
-      if (uniforms.noiseScale) gl.uniform1f(uniforms.noiseScale, 1.0);
-      if (uniforms.cloudDensity) gl.uniform1f(uniforms.cloudDensity, 2.0);
-      if (uniforms.softEdges) gl.uniform1f(uniforms.softEdges, 0.3);
-      if (uniforms.shadowIntensity) gl.uniform1f(uniforms.shadowIntensity, 2.0);
-      if (uniforms.stepCount) gl.uniform1f(uniforms.stepCount, 32.0);
-      if (uniforms.fadeDistance) gl.uniform1f(uniforms.fadeDistance, 5.0);
-
-      gl.enableVertexAttribArray(positionLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-      time += 0.01;
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    resize();
-    window.addEventListener("resize", resize);
-    animate();
-
-    return () => {
-      isMounted = false;
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener("resize", resize);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
+export function A1() {
+  const canvasRef = useWebGL(CLOUD_FS);
+  return (
+    <div style={{ width: "100%", position: "relative" }}>
+      <canvas ref={canvasRef} style={{ width: "100%", display: "block" }} />
+      <div style={{
+        position: "absolute", bottom: 8, right: 10,
+        fontFamily: "var(--font-mono)", fontSize: "0.68rem",
+        color: "rgba(255,255,255,0.35)", pointerEvents: "none",
+      }}>
+        move mouse to tilt view
+      </div>
+    </div>
+  );
+}

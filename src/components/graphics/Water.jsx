@@ -1,158 +1,133 @@
-// main/src/components/Water.js
+/**
+ * Water.jsx — Stylized water surface with FBM waves, refraction & Fresnel.
+ * Uses the shared useWebGL hook; zero boilerplate.
+ */
+import { useWebGL } from "../../utils/webgl";
 
-import { makeCanvas } from "../../utils/Utility";
+const WATER_FS = `
+precision highp float;
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform vec2  u_mouse;
+uniform vec2  u_click_pos[5];
+uniform float u_click_time[5];
 
-export const WaterTexture = makeCanvas(`
-  precision mediump float;
-  uniform vec2 u_resolution;
-  uniform float u_time;
-  uniform vec2 u_click_pos[5];
-  uniform float u_click_time[5];
+// ── Noise ──────────────────────────────────────────────────────────
+vec2 hash2(vec2 p) {
+  return fract(sin(vec2(dot(p, vec2(127.1, 311.7)),
+                        dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+}
 
-  // Improved hash function for better noise quality
-  vec2 hash2(vec2 p) {
-    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+float perlin(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  vec2 a = hash2(i),           b = hash2(i + vec2(1,0));
+  vec2 c = hash2(i + vec2(0,1)), d = hash2(i + vec2(1,1));
+  return mix(mix(dot(a*2.-1., f),          dot(b*2.-1., f-vec2(1,0)), u.x),
+             mix(dot(c*2.-1., f-vec2(0,1)), dot(d*2.-1., f-vec2(1,1)), u.x), u.y) * .5 + .5;
+}
+
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 6; i++) { v += a * perlin(p); p *= 2.03; a *= 0.5; }
+  return v;
+}
+
+// ── Click ripples ──────────────────────────────────────────────────
+float rippleHeight(vec2 p) {
+  float r = 0.0;
+  for (int i = 0; i < 5; i++) {
+    if (u_click_time[i] < 0.0) continue;
+    float dt  = u_time - u_click_time[i];
+    vec2  cp  = (u_click_pos[i] + 1.0) * 0.5 * vec2(u_resolution.x / u_resolution.y, 1.0) * 5.0;
+    float d   = distance(p, cp);
+    if (d > 3.5) continue;
+    float env = (1.0 - exp(-dt * 1.5)) * exp(-dt * 0.35);
+    r += sin(d * 18.0 - dt * 6.0) * exp(-d * 2.5) * env * 0.06;
   }
+  return r;
+}
 
-  // Perlin noise implementation
-  float perlinNoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
+// ── Water height field ─────────────────────────────────────────────
+float H(vec2 p) {
+  // Mouse tilt: subtle parallax
+  vec2 tilt = u_mouse * 0.06;
+  float waves =  0.05 * sin(p.x * 2.1 + u_time * 1.1 + tilt.x)
+              +  0.03 * sin(p.y * 3.3 + p.x * 1.4 + u_time * 0.85 + tilt.y)
+              +  0.02 * sin((p.x + p.y) * 4.0 + u_time * 1.4);
+  float detail = fbm(p * 1.8 + vec2(u_time * 0.12, u_time * 0.07)) * 0.07 - 0.035;
+  return waves + detail + rippleHeight(p);
+}
 
-    vec2 a = hash2(i + vec2(0.0, 0.0));
-    vec2 b = hash2(i + vec2(1.0, 0.0));
-    vec2 c = hash2(i + vec2(0.0, 1.0));
-    vec2 d = hash2(i + vec2(1.0, 1.0));
+// ── Sandy bottom texture ───────────────────────────────────────────
+vec3 sandColor(vec2 p) {
+  float n = fbm(p * 2.5 + 18.3);
+  return mix(vec3(0.74, 0.68, 0.48), vec3(0.93, 0.85, 0.63), n);
+}
 
-    float va = dot(a * 2.0 - 1.0, f - vec2(0.0, 0.0));
-    float vb = dot(b * 2.0 - 1.0, f - vec2(1.0, 0.0));
-    float vc = dot(c * 2.0 - 1.0, f - vec2(0.0, 1.0));
-    float vd = dot(d * 2.0 - 1.0, f - vec2(1.0, 1.0));
+void main() {
+  vec2 uv    = gl_FragCoord.xy / u_resolution.xy;
+  float asp  = u_resolution.x / u_resolution.y;
+  uv.x      *= asp;
+  float sc   = 5.0;
+  vec2 p     = uv * sc;
 
-    return mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y) * 0.5 + 0.5;
-  }
+  float h    = H(p);
+  float eps  = 0.003;
+  float dx   = H(p + vec2(eps, 0)) - H(p - vec2(eps, 0));
+  float dy   = H(p + vec2(0, eps)) - H(p - vec2(0, eps));
+  vec3 nrm   = normalize(vec3(dx / (2.*eps) * 0.6, dy / (2.*eps) * 0.6, 1.0));
 
-  // FBM with unrolled loop for compatibility
-  float fbm(vec2 p) {
-    float value = 0.0;
-    float amplitude = 0.5;
-    float frequency = 1.0;
-    float lacunarity = 2.0;
-    float persistence = 0.5;
+  // Refraction offset → sample sandy bottom through water
+  vec2 refOff = nrm.xy * (0.08 + h * 0.5);
+  vec3 bottom  = sandColor(p + refOff);
 
-    value += amplitude * perlinNoise(p * frequency);
-    frequency *= lacunarity;
-    amplitude *= persistence;
+  // Depth-based water tint (absorption)
+  vec3 waterTint = vec3(0.02, 0.22, 0.55);
+  float depth    = clamp(0.45 + abs(h) * 4.0, 0.0, 1.0);
+  vec3 absorbed  = mix(bottom, waterTint, depth * 0.7);
 
-    value += amplitude * perlinNoise(p * frequency);
-    frequency *= lacunarity;
-    amplitude *= persistence;
+  // Directional lighting
+  vec3 L   = normalize(vec3(0.6, 0.8, 1.0));
+  vec3 V   = vec3(0, 0, 1);
+  vec3 H2  = normalize(L + V);
+  float df = max(dot(nrm, L), 0.0) * 0.7 + 0.3;
+  float sp = pow(max(dot(nrm, H2), 0.0), 160.0) * 1.8; // tight glint
 
-    value += amplitude * perlinNoise(p * frequency);
-    frequency *= lacunarity;
-    amplitude *= persistence;
+  vec3 col = absorbed * df + vec3(1.0, 0.97, 0.9) * sp;
 
-    value += amplitude * perlinNoise(p * frequency);
-    frequency *= lacunarity;
-    amplitude *= persistence;
+  // Foam on crests (approx. curvature)
+  float dxx = H(p+vec2(eps*2.,0.)) + H(p-vec2(eps*2.,0.)) - 2.*h;
+  float dyy = H(p+vec2(0.,eps*2.)) + H(p-vec2(0.,eps*2.)) - 2.*h;
+  float curv = (dxx + dyy) * -8.0;
+  float foam = smoothstep(0.15, 0.45, curv) * smoothstep(0.04, 0.1, abs(h));
+  col = mix(col, vec3(1.0), foam * 0.75);
 
-    value += amplitude * perlinNoise(p * frequency);
-    frequency *= lacunarity;
-    amplitude *= persistence;
+  // Fresnel sky reflection
+  float fr  = pow(1.0 - max(dot(nrm, V), 0.0), 4.0);
+  vec3 sky  = vec3(0.45, 0.65, 1.0);
+  col = mix(col, sky, fr * 0.45);
 
-    value += amplitude * perlinNoise(p * frequency);
+  // Subtle vignette
+  vec2 q = uv / vec2(asp, 1.0) * 2.0 - 1.0;
+  col *= 1.0 - 0.15 * dot(q, q);
 
-    return value;
-  }
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
 
-  // Ripple height contribution
-  float getRippleHeight(vec2 p, float aspect, float scale) {
-    float ripple = 0.0;
-    for (int i = 0; i < 5; i++) {
-      if (u_click_time[i] < 0.0) continue;
-      float time_delta = u_time - u_click_time[i];
-      vec2 click_ndc = u_click_pos[i];
-      vec2 click_uv = (click_ndc + 1.0) / 2.0;
-      click_uv.x *= aspect;
-      vec2 click = click_uv * scale;
-      float dist = distance(p, click);
-      if (dist > 2.0) continue;
-      float fade_in = 1.0 - exp(-time_delta * 1.0);
-      float fade_out = exp(-time_delta * 0.2);
-      float fade = fade_in * fade_out;
-      float wave = sin(dist * 20.0 - time_delta * 5.0) * exp(-dist * 3.0);
-      ripple += wave * fade * 0.05;
-    }
-    return ripple;
-  }
-
-  // Bottom texture simulation
-  vec3 bottomColor(vec2 p) {
-    float n = fbm(p * 3.0);
-    return mix(vec3(0.76, 0.70, 0.50), vec3(0.95, 0.87, 0.65), n); // Sandy bottom
-  }
-
-  // Height function
-  float height(vec2 p, float aspect, float scale) {
-    // Directional moving waves
-    float waves = 0.1 * sin(p.x * 2.0 + u_time * 1.0) * 0.05;
-    waves += 0.05 * sin(p.y * 3.0 + p.x * 1.5 + u_time * 0.8) * 0.03;
-    // FBM for small details
-    float noise = fbm(p * 2.0 + vec2(u_time * 0.1, u_time * 0.05)) * 0.1;
-    // Ripple
-    float ripple = getRippleHeight(p, aspect, scale);
-    return waves + noise + ripple;
-  }
-
-  void main() {
-    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-    float aspect = u_resolution.x / u_resolution.y;
-    uv.x *= aspect;
-    float scale = 5.0;
-    vec2 p = uv * scale;
-
-    // Get height
-    float h = height(p, aspect, scale);
-
-    // Compute normals with smaller offset for better detail
-    float offset = 0.002;
-    float dx = height(p + vec2(offset, 0.0), aspect, scale) - height(p - vec2(offset, 0.0), aspect, scale);
-    float dy = height(p + vec2(0.0, offset), aspect, scale) - height(p - vec2(0.0, offset), aspect, scale);
-    vec3 normal = normalize(vec3(dx / offset * 0.5, dy / offset * 0.5, 1.0));
-
-    // Refraction: offset bottom sampling
-    vec2 refract_offset = normal.xy * (0.1 + h * 0.5);
-    vec3 bottom = bottomColor(p + refract_offset);
-
-    // Water color with absorption
-    vec3 water_tint = vec3(0.0, 0.25, 0.6);
-    float depth = 0.5 + abs(h) * 0.5; // Simulated depth
-    vec3 absorbed = mix(bottom, water_tint, depth * 0.6);
-
-    // Lighting
-    vec3 light_dir = normalize(vec3(0.5, 0.5, 1.0));
-    float diffuse = max(0.0, dot(normal, light_dir)) * 0.7 + 0.3;
-    vec3 view_dir = vec3(0.0, 0.0, 1.0);
-    vec3 halfway = normalize(light_dir + view_dir);
-    float specular = pow(max(0.0, dot(normal, halfway)), 128.0) * 1.0;
-
-    // Apply lighting to absorbed color
-    vec3 color = absorbed * diffuse + vec3(1.0, 1.0, 0.9) * specular;
-
-    // Foam on crests
-    // Approximate curvature with second derivative
-    float dxx = height(p + vec2(offset * 2.0, 0.0), aspect, scale) + height(p - vec2(offset * 2.0, 0.0), aspect, scale) - 2.0 * h;
-    float dyy = height(p + vec2(0.0, offset * 2.0), aspect, scale) + height(p - vec2(0.0, offset * 2.0), aspect, scale) - 2.0 * h;
-    float curvature = (dxx + dyy) * -10.0; // Inverted for crests
-    float foam = smoothstep(0.2, 0.4, curvature) * smoothstep(0.05, 0.1, abs(h));
-    color = mix(color, vec3(1.0), foam * 0.8);
-
-    // Fresnel for sky reflection
-    float fresnel = pow(1.0 - max(0.0, dot(normal, view_dir)), 4.0);
-    vec3 sky_color = vec3(0.5, 0.7, 1.0); // Constant sky color without gradient
-    color = mix(color, sky_color, fresnel * 0.4);
-
-    gl_FragColor = vec4(color, 1.0);
-  }
-`);
+export function WaterTexture() {
+  const canvasRef = useWebGL(WATER_FS);
+  return (
+    <div style={{ width: "100%", position: "relative" }}>
+      <canvas ref={canvasRef} style={{ width: "100%", display: "block" }} />
+      <div style={{
+        position: "absolute", bottom: 8, right: 10,
+        fontFamily: "var(--font-mono)", fontSize: "0.68rem",
+        color: "rgba(255,255,255,0.4)", pointerEvents: "none",
+      }}>
+        move mouse to tilt · click for ripples
+      </div>
+    </div>
+  );
+}

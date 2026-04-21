@@ -1,2987 +1,477 @@
-import React, { useRef, useEffect, useState } from "react";
+/**
+ * RayTracingCanvas.jsx
+ *
+ * 2D demonstrations (A1–A5, B1–B3): built on a single shared Scene2D primitive.
+ * 3D ray tracer (C1): GPU GLSL shader via useWebGL hook.
+ *
+ * All boilerplate is in utils/webgl.js — nothing duplicated here.
+ */
+import { useRef, useEffect } from "react";
+import { use2DCanvas, useWebGL } from "../../utils/webgl";
 
-const generalVertexShaderSource = `
-attribute vec4 a_position;
-void main() {
-  gl_Position = a_position;
-}
-`;
+/* ═══════════════════════════════════════════════════════════════════
+   Shared 2D scene data & math helpers
+   ══════════════════════════════════════════════════════════════════ */
+const DEFAULT_OBSTACLES = [
+  { x: -0.70, y:  0.30, w: 0.20, h: 0.40 },
+  { x:  0.20, y: -0.50, w: 0.30, h: 0.20 },
+  { x: -0.20, y:  0.00, w: 0.15, h: 0.60 },
+];
 
-const generalFragmentShaderSource = `
-precision mediump float;
-uniform vec4 u_color;
-void main() {
-  gl_FragColor = u_color;
-}
-`;
-
-const circleVertexShaderSource = `
-attribute vec2 a_position;
-attribute vec2 a_center;
-attribute float a_radius;
-attribute vec4 a_color;
-varying vec2 v_position;
-varying vec4 v_color;
-void main() {
-  gl_Position = vec4(a_position * a_radius * 2.0 + a_center, 0.0, 1.0);
-  v_position = a_position;
-  v_color = a_color;
-}
-`;
-
-const circleFragmentShaderSource = `
-precision mediump float;
-varying vec2 v_position;
-varying vec4 v_color;
-void main() {
-  float dist = length(v_position);
-  if (dist > 0.5) discard;
-  gl_FragColor = v_color;
-}
-`;
-
-const createShader = (gl, type, source) => {
-  const shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (success) return shader;
-  console.error(gl.getShaderInfoLog(shader));
-  gl.deleteShader(shader);
-  return null;
-};
-
-const createProgram = (gl, vertexShader, fragmentShader) => {
-  const program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  const success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (success) return program;
-  console.error(gl.getProgramInfoLog(program));
-  gl.deleteProgram(program);
-  return null;
-};
-
-export const A1 = () => {
-  const canvasRef = useRef(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [isMouseOver, setIsMouseOver] = useState(false);
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-
-    const draw = (gl) => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      obstacles.forEach((obstacle) => {
-        const positions = [
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-        ];
-
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      const circlePoints = 64;
-      const radius = 0.02;
-      const positions = [];
-      const drawMouseX = isMouseOver ? mousePos.x : 0;
-      const drawMouseY = isMouseOver ? mousePos.y : 0;
-
-      for (let i = 0; i < circlePoints; i++) {
-        const angle = (i / circlePoints) * 2 * Math.PI;
-        const x = drawMouseX + radius * Math.cos(angle);
-        const y = drawMouseY + radius * Math.sin(angle);
-        positions.push(x, y);
-      }
-
-      gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(positions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-      gl.drawArrays(gl.TRIANGLE_FAN, 0, circlePoints);
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw(gl);
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      setMousePos({
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      });
-
-      draw(gl);
-    };
-
-    const handleMouseEnter = () => {
-      setIsMouseOver(true);
-    };
-
-    const handleMouseLeave = () => {
-      setIsMouseOver(false);
-      draw(gl);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseenter", handleMouseEnter);
-    canvas.addEventListener("mouseleave", handleMouseLeave);
-
-    draw(gl);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseenter", handleMouseEnter);
-      canvas.removeEventListener("mouseleave", handleMouseLeave);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, [mousePos]);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const A2 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const initialDirRef = useRef({ x: 0, y: 0 });
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  const rayWidth = 0.01;
-
-  // Set random initial direction once on mount
-  useEffect(() => {
-    const angle = Math.random() * 2 * Math.PI;
-    initialDirRef.current = {
-      x: Math.cos(angle),
-      y: Math.sin(angle),
-    };
-  }, []);
-
-  // Ray casting function
-  const castRay = (startX, startY, dirX, dirY) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-
-    obstacles.forEach((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = (left - startX) / dirX;
-      const tMaxX = (right - startX) / dirX;
-      const tMinY = (top - startY) / dirY;
-      const tMaxY = (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
-    }
-
-    return { x: hitX, y: hitY };
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      obstacles.forEach((obstacle) => {
-        const positions = [
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-        ];
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      // Calculate ray direction
-      const rayStartX = 0;
-      const rayStartY = 0;
-      let rayDirX, rayDirY;
-
-      const mouseMoved =
-        mousePosRef.current.x !== 0 || mousePosRef.current.y !== 0;
-      if (mouseMoved) {
-        rayDirX = mousePosRef.current.x - rayStartX;
-        rayDirY = mousePosRef.current.y - rayStartY;
-        const length = Math.sqrt(rayDirX * rayDirX + rayDirY * rayDirY);
-        rayDirX /= length;
-        rayDirY /= length;
+/**
+ * Cast a single ray against axis-aligned rect obstacles.
+ * Returns { x, y, normalX, normalY, hit }
+ */
+function castRay(sx, sy, dx, dy, obstacles) {
+  let tMin = Infinity, nx = 0, ny = 0;
+  for (const o of obstacles) {
+    const [l, r, t, b] = [o.x, o.x + o.w, o.y, o.y - o.h];
+    const txA = dx ? (l - sx) / dx : Infinity;
+    const txB = dx ? (r - sx) / dx : Infinity;
+    const tyA = dy ? (t - sy) / dy : Infinity;
+    const tyB = dy ? (b - sy) / dy : Infinity;
+    const tNear = Math.max(Math.min(txA, txB), Math.min(tyA, tyB));
+    const tFar  = Math.min(Math.max(txA, txB), Math.max(tyA, tyB));
+    if (tNear > 0 && tNear < tFar && tNear < tMin) {
+      tMin = tNear;
+      // Determine surface normal from which pair was the limiting face
+      if (Math.min(txA, txB) > Math.min(tyA, tyB)) {
+        nx = dx < 0 ? 1 : -1; ny = 0;
       } else {
-        rayDirX = initialDirRef.current.x;
-        rayDirY = initialDirRef.current.y;
+        nx = 0; ny = dy < 0 ? 1 : -1;
       }
-
-      const hit = castRay(rayStartX, rayStartY, rayDirX, rayDirY);
-
-      gl.uniform4f(colorUniformLocation, 1.0, 1.0, 0.0, 1.0);
-
-      const perpX = -rayDirY;
-      const perpY = rayDirX;
-      const halfWidth = rayWidth / 2;
-
-      const rayPositions = [
-        // First triangle
-        rayStartX - perpX * halfWidth,
-        rayStartY - perpY * halfWidth, // Bottom left
-        rayStartX + perpX * halfWidth,
-        rayStartY + perpY * halfWidth, // Top left
-        hit.x - perpX * halfWidth,
-        hit.y - perpY * halfWidth, // Bottom right
-        // Second triangle
-        rayStartX + perpX * halfWidth,
-        rayStartY + perpY * halfWidth, // Top left
-        hit.x + perpX * halfWidth,
-        hit.y + perpY * halfWidth, // Top right
-        hit.x - perpX * halfWidth,
-        hit.y - perpY * halfWidth, // Bottom right
-      ];
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(rayPositions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-      const circlePoints = 64;
-      const radius = 0.02;
-      const positions = [];
-      for (let i = 0; i < circlePoints; i++) {
-        const angle = (i / circlePoints) * 2 * Math.PI;
-        const x = hit.x + radius * Math.cos(angle);
-        const y = hit.y + radius * Math.sin(angle);
-        positions.push(x, y);
-      }
-      gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(positions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-      gl.drawArrays(gl.TRIANGLE_FAN, 0, circlePoints);
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      mousePosRef.current = {
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      };
-
-      draw();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    draw();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const A3 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const initialDirRef = useRef({ x: 0, y: 0 });
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  // Ray parameters
-  const rayWidth = 0.005; // Thinner rays for multiple casts
-  const fov = Math.PI / 3; // 60-degree field of view
-  const rayCount = 20; // Number of rays in the FOV
-
-  // Set random initial direction once on mount
-  useEffect(() => {
-    const angle = Math.random() * 2 * Math.PI;
-    initialDirRef.current = {
-      x: Math.cos(angle),
-      y: Math.sin(angle),
-    };
-  }, []);
-
-  const castRay = (startX, startY, dirX, dirY) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-
-    obstacles.forEach((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = (left - startX) / dirX;
-      const tMaxX = (right - startX) / dirX;
-      const tMinY = (top - startY) / dirY;
-      const tMaxY = (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
     }
+  }
+  if (tMin === Infinity) return { x: sx + dx * 2, y: sy + dy * 2, hit: false, nx: 0, ny: 0 };
+  return { x: sx + dx * tMin, y: sy + dy * tMin, hit: true, nx, ny };
+}
 
-    return { x: hitX, y: hitY };
-  };
+/** Reflect direction d around surface normal n */
+function reflect(dx, dy, nx, ny) {
+  const dot = dx * nx + dy * ny;
+  return [dx - 2 * dot * nx, dy - 2 * dot * ny];
+}
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      obstacles.forEach((obstacle) => {
-        const positions = [
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-        ];
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      const rayStartX = 0;
-      const rayStartY = 0;
-      let baseDirX, baseDirY;
-
-      const mouseMoved =
-        mousePosRef.current.x !== 0 || mousePosRef.current.y !== 0;
-      if (mouseMoved) {
-        baseDirX = mousePosRef.current.x - rayStartX;
-        baseDirY = mousePosRef.current.y - rayStartY;
-        const length = Math.sqrt(baseDirX * baseDirX + baseDirY * baseDirY);
-        baseDirX /= length;
-        baseDirY /= length;
-      } else {
-        baseDirX = initialDirRef.current.x;
-        baseDirY = initialDirRef.current.y;
-      }
-
-      // Cast multiple rays for FOV
-      const rays = [];
-      const angleStep = fov / (rayCount - 1);
-      const startAngle = Math.atan2(baseDirY, baseDirX) - fov / 2;
-
-      for (let i = 0; i < rayCount; i++) {
-        const angle = startAngle + i * angleStep;
-        const dirX = Math.cos(angle);
-        const dirY = Math.sin(angle);
-        const hit = castRay(rayStartX, rayStartY, dirX, dirY);
-        rays.push({ dirX, dirY, hit });
-      }
-
-      gl.uniform4f(colorUniformLocation, 1.0, 1.0, 0.0, 0.3);
-      rays.forEach(({ dirX, dirY, hit }) => {
-        const perpX = -dirY;
-        const perpY = dirX;
-        const halfWidth = rayWidth / 2;
-
-        const rayPositions = [
-          rayStartX - perpX * halfWidth,
-          rayStartY - perpY * halfWidth,
-          rayStartX + perpX * halfWidth,
-          rayStartY + perpY * halfWidth,
-          hit.x - perpX * halfWidth,
-          hit.y - perpY * halfWidth,
-          rayStartX + perpX * halfWidth,
-          rayStartY + perpY * halfWidth,
-          hit.x + perpX * halfWidth,
-          hit.y + perpY * halfWidth,
-          hit.x - perpX * halfWidth,
-          hit.y - perpY * halfWidth,
-        ];
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(rayPositions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      const circlePoints = 32;
-      const radius = 0.015;
-      rays.forEach(({ hit }) => {
-        const positions = [];
-        for (let i = 0; i < circlePoints; i++) {
-          const angle = (i / circlePoints) * 2 * Math.PI;
-          const x = hit.x + radius * Math.cos(angle);
-          const y = hit.y + radius * Math.sin(angle);
-          positions.push(x, y);
-        }
-        gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLE_FAN, 0, circlePoints);
-      });
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      mousePosRef.current = {
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      };
-
-      draw();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    draw();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const A4 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const initialDirRef = useRef({ x: 0, y: 0 });
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  const rayWidth = 0.005;
-  const reflectionRayWidth = 0.003;
-  const fov = Math.PI / 3; // 60-degree FOV
-  const rayCount = 20;
-
-  useEffect(() => {
-    const angle = Math.random() * 2 * Math.PI;
-    initialDirRef.current = { x: Math.cos(angle), y: Math.sin(angle) };
-  }, []);
-
-  const castRay = (startX, startY, dirX, dirY, isReflection = false) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-    let normalX = 0;
-    let normalY = 0;
-    let hitObstacle = null;
-
-    obstacles.forEach((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = dirX === 0 ? Infinity : (left - startX) / dirX;
-      const tMaxX = dirX === 0 ? Infinity : (right - startX) / dirX;
-      const tMinY = dirY === 0 ? Infinity : (top - startY) / dirY;
-      const tMaxY = dirY === 0 ? Infinity : (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-        hitObstacle = obstacle;
-
-        const epsilon = 0.001;
-        if (Math.abs(hitX - left) < epsilon) normalX = -1;
-        else if (Math.abs(hitX - right) < epsilon) normalX = 1;
-        if (Math.abs(hitY - top) < epsilon) normalY = 1;
-        else if (Math.abs(hitY - bottom) < epsilon) normalY = -1;
-
-        if (normalX === 0 && normalY === 0) {
-          if (Math.abs(dirX) > Math.abs(dirY)) {
-            normalX = hitX < startX ? -1 : 1;
-          } else {
-            normalY = hitY < startY ? -1 : 1;
-          }
-        }
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
-      return { x: hitX, y: hitY, reflects: false };
-    }
-
-    const normalLength = Math.sqrt(normalX * normalX + normalY * normalY);
-    normalX /= normalLength;
-    normalY /= normalLength;
-
-    if (!isReflection) {
-      const dot = dirX * normalX + dirY * normalY;
-      let reflectDirX = dirX - 2 * dot * normalX;
-      let reflectDirY = dirY - 2 * dot * normalY;
-      const epsilon = 0.001;
-      reflectDirX += epsilon * (Math.random() - 0.5);
-      reflectDirY += epsilon * (Math.random() - 0.5);
-      const reflectLength = Math.sqrt(
-        reflectDirX * reflectDirX + reflectDirY * reflectDirY
-      );
-      reflectDirX /= reflectLength;
-      reflectDirY /= reflectLength;
-
-      const reflectHit = castRay(hitX, hitY, reflectDirX, reflectDirY, true);
-
-      return {
-        x: hitX,
-        y: hitY,
-        reflects: true,
-        reflectDirX,
-        reflectDirY,
-        reflectHit,
-      };
-    }
-
-    // For reflection rays, stop at the hit point without further reflection
-    return {
-      x: hitX,
-      y: hitY,
-      reflects: false,
-    };
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      const obstaclePositions = [];
-      obstacles.forEach((obstacle) => {
-        obstaclePositions.push(
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height
-        );
-      });
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(obstaclePositions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-      gl.drawArrays(gl.TRIANGLES, 0, obstacles.length * 6);
-
-      const rayStartX = 0;
-      const rayStartY = 0;
-      let baseDirX, baseDirY;
-      const mouseMoved =
-        mousePosRef.current.x !== 0 || mousePosRef.current.y !== 0;
-      if (mouseMoved) {
-        baseDirX = mousePosRef.current.x - rayStartX;
-        baseDirY = mousePosRef.current.y - rayStartY;
-        const length = Math.sqrt(baseDirX * baseDirX + baseDirY * baseDirY);
-        baseDirX /= length;
-        baseDirY /= length;
-      } else {
-        baseDirX = initialDirRef.current.x;
-        baseDirY = initialDirRef.current.y;
-      }
-
-      const rays = [];
-      const angleStep = fov / (rayCount - 1);
-      const startAngle = Math.atan2(baseDirY, baseDirX) - fov / 2;
-      for (let i = 0; i < rayCount; i++) {
-        const angle = startAngle + i * angleStep;
-        const dirX = Math.cos(angle);
-        const dirY = Math.sin(angle);
-        const hit = castRay(rayStartX, rayStartY, dirX, dirY);
-        rays.push({ dirX, dirY, ...hit });
-      }
-
-      const initialRayPositions = [];
-      rays.forEach(({ dirX, dirY, x, y }) => {
-        const perpX = -dirY;
-        const perpY = dirX;
-        const halfWidth = rayWidth / 2;
-        initialRayPositions.push(
-          rayStartX - perpX * halfWidth,
-          rayStartY - perpY * halfWidth,
-          rayStartX + perpX * halfWidth,
-          rayStartY + perpY * halfWidth,
-          x - perpX * halfWidth,
-          y - perpY * halfWidth,
-          rayStartX + perpX * halfWidth,
-          rayStartY + perpY * halfWidth,
-          x + perpX * halfWidth,
-          y + perpY * halfWidth,
-          x - perpX * halfWidth,
-          y - perpY * halfWidth
-        );
-      });
-      gl.uniform4f(colorUniformLocation, 1.0, 1.0, 0.0, 0.3);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(initialRayPositions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-      gl.drawArrays(gl.TRIANGLES, 0, rayCount * 6);
-
-      const reflectRayPositions = [];
-      rays.forEach(
-        ({ x, y, reflects, reflectDirX, reflectDirY, reflectHit }) => {
-          if (reflects) {
-            const perpX = -reflectDirY;
-            const perpY = reflectDirX;
-            const halfWidth = reflectionRayWidth / 2;
-            reflectRayPositions.push(
-              x - perpX * halfWidth,
-              y - perpY * halfWidth,
-              x + perpX * halfWidth,
-              y + perpY * halfWidth,
-              reflectHit.x - perpX * halfWidth,
-              reflectHit.y - perpY * halfWidth,
-              x + perpX * halfWidth,
-              y + perpY * halfWidth,
-              reflectHit.x + perpX * halfWidth,
-              reflectHit.y + perpY * halfWidth,
-              reflectHit.x - perpX * halfWidth,
-              reflectHit.y - perpY * halfWidth
-            );
-          }
-        }
-      );
-      gl.uniform4f(colorUniformLocation, 0.0, 1.0, 0.0, 1.0);
-      if (reflectRayPositions.length > 0) {
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(reflectRayPositions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        const reflectTriangleCount = rays.filter((r) => r.reflects).length * 2;
-        gl.drawArrays(gl.TRIANGLES, 0, reflectTriangleCount * 3);
-      }
-
-      const circlePoints = 32;
-      const radius = 0.015;
-      const hitPositions = [];
-      rays.forEach(({ x, y }) => {
-        hitPositions.push(x, y);
-        for (let i = 0; i < circlePoints; i++) {
-          const angle = (i / circlePoints) * 2 * Math.PI;
-          const cx = x + radius * Math.cos(angle);
-          const cy = y + radius * Math.sin(angle);
-          hitPositions.push(cx, cy);
-        }
-      });
-      gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(hitPositions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-      let offset = 0;
-      for (let i = 0; i < rayCount; i++) {
-        gl.drawArrays(gl.TRIANGLE_FAN, offset, circlePoints + 1);
-        offset += circlePoints + 1;
-      }
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      mousePosRef.current = {
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      };
-      draw();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    draw();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const A5 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const initialDirRef = useRef({ x: 0, y: 0 });
-  const lightPosRef = useRef({
-    x: Math.random() * 2 - 1,
-    y: Math.random() * 2 - 1,
+/* ═══════════════════════════════════════════════════════════════════
+   Shared 2D drawing helpers (Canvas2D)
+   ══════════════════════════════════════════════════════════════════ */
+function drawObstacles(ctx, obstacles, cx, cy) {
+  obstacles.forEach((o) => {
+    ctx.fillStyle = "rgba(180,190,210,0.12)";
+    ctx.fillRect(cx(o.x), cy(o.y), cx(o.x + o.w) - cx(o.x), cy(o.y - o.h) - cy(o.y));
+    ctx.strokeStyle = "rgba(160,180,220,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx(o.x), cy(o.y), cx(o.x + o.w) - cx(o.x), cy(o.y - o.h) - cy(o.y));
   });
-  const isDraggingRef = useRef(false);
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  const rayWidth = 0.005;
-  const reflectionRayWidth = 0.003;
-  const fov = Math.PI / 3;
-  const rayCount = 20;
-  const lightRadius = 0.03;
-  const hitPointRadius = 0.015;
-
-  useEffect(() => {
-    const angle = Math.random() * 2 * Math.PI;
-    initialDirRef.current = { x: Math.cos(angle), y: Math.sin(angle) };
-  }, []);
-  const castRay = (startX, startY, dirX, dirY, isReflection = false) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-    let normalX = 0;
-    let normalY = 0;
-    let hitObstacleIdx = -1;
-
-    obstacles.forEach((obstacle, idx) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = dirX === 0 ? Infinity : (left - startX) / dirX;
-      const tMaxX = dirX === 0 ? Infinity : (right - startX) / dirX;
-      const tMinY = dirY === 0 ? Infinity : (top - startY) / dirY;
-      const tMaxY = dirY === 0 ? Infinity : (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-        hitObstacleIdx = idx;
-
-        const epsilon = 0.001;
-        if (Math.abs(hitX - left) < epsilon) normalX = -1;
-        else if (Math.abs(hitX - right) < epsilon) normalX = 1;
-        if (Math.abs(hitY - top) < epsilon) normalY = 1;
-        else if (Math.abs(hitY - bottom) < epsilon) normalY = -1;
-
-        if (normalX === 0 && normalY === 0) {
-          if (Math.abs(dirX) > Math.abs(dirY)) {
-            normalX = hitX < startX ? -1 : 1;
-          } else {
-            normalY = hitY < startY ? -1 : 1;
-          }
-        }
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
-      return { x: hitX, y: hitY, reflects: false };
-    }
-
-    const normalLength = Math.sqrt(normalX * normalX + normalY * normalY);
-    normalX /= normalLength;
-    normalY /= normalLength;
-
-    if (!isReflection) {
-      const lightDirX = lightPosRef.current.x - hitX;
-      const lightDirY = lightPosRef.current.y - hitY;
-      const lightDist = Math.sqrt(
-        lightDirX * lightDirX + lightDirY * lightDirY
-      );
-      const lightDirXNorm = lightDirX / lightDist;
-      const lightDirYNorm = lightDirY / lightDist;
-
-      // Apply a small offset to avoid self-intersection
-      const bias = 0.001;
-      const offsetX = hitX + normalX * bias;
-      const offsetY = hitY + normalY * bias;
-
-      let hasClearPath = true;
-      obstacles.forEach((obstacle, idx) => {
-        const left = obstacle.x;
-        const right = obstacle.x + obstacle.width;
-        const top = obstacle.y;
-        const bottom = obstacle.y - obstacle.height;
-
-        const tMinX =
-          lightDirXNorm === 0 ? Infinity : (left - offsetX) / lightDirXNorm;
-        const tMaxX =
-          lightDirXNorm === 0 ? Infinity : (right - offsetX) / lightDirXNorm;
-        const tMinY =
-          lightDirYNorm === 0 ? Infinity : (top - offsetY) / lightDirYNorm;
-        const tMaxY =
-          lightDirYNorm === 0 ? Infinity : (bottom - offsetY) / lightDirYNorm;
-
-        const tX1 = Math.min(tMinX, tMaxX);
-        const tX2 = Math.max(tMinX, tMaxX);
-        const tY1 = Math.min(tMinY, tMaxY);
-        const tY2 = Math.max(tMinY, tMaxY);
-
-        const tNear = Math.max(tX1, tY1);
-        const tFar = Math.min(tX2, tY2);
-
-        // Check if the ray intersects an obstacle before reaching the light
-        if (tNear > 0 && tNear < tFar && tNear < lightDist) {
-          hasClearPath = false;
-        }
-      });
-
-      return {
-        x: hitX,
-        y: hitY,
-        reflects: hasClearPath,
-        lightDirX: lightDirXNorm,
-        lightDirY: lightDirYNorm,
-        lightHit: { x: lightPosRef.current.x, y: lightPosRef.current.y },
-      };
-    }
-
-    return {
-      x: hitX,
-      y: hitY,
-      reflects: false,
-    };
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const generalVertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const generalFragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const generalProgram = createProgram(
-      gl,
-      generalVertexShader,
-      generalFragmentShader
-    );
-
-    const circleVertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      circleVertexShaderSource
-    );
-    const circleFragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      circleFragmentShaderSource
-    );
-    const circleProgram = createProgram(
-      gl,
-      circleVertexShader,
-      circleFragmentShader
-    );
-
-    if (!generalProgram || !circleProgram) return;
-
-    const generalPositionLocation = gl.getAttribLocation(
-      generalProgram,
-      "a_position"
-    );
-    const generalColorLocation = gl.getUniformLocation(
-      generalProgram,
-      "u_color"
-    );
-
-    const circlePositionLocation = gl.getAttribLocation(
-      circleProgram,
-      "a_position"
-    );
-    const circleCenterLocation = gl.getAttribLocation(
-      circleProgram,
-      "a_center"
-    );
-    const circleRadiusLocation = gl.getAttribLocation(
-      circleProgram,
-      "a_radius"
-    );
-    const circleColorLocation = gl.getAttribLocation(circleProgram, "a_color");
-
-    const positionBuffer = gl.createBuffer();
-    const circleDataBuffer = gl.createBuffer();
-
-    const quadVertices = new Float32Array([
-      -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, 0.5,
-    ]);
-
-    const ext = gl.getExtension("ANGLE_instanced_arrays");
-    const supportsInstancing = !!ext;
-
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
-      gl.useProgram(generalProgram);
-      gl.enableVertexAttribArray(generalPositionLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      const obstaclePositions = [];
-      obstacles.forEach((obstacle) => {
-        obstaclePositions.push(
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height
-        );
-      });
-      gl.uniform4f(generalColorLocation, 0.5, 0.5, 0.5, 1.0);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(obstaclePositions),
-        gl.STATIC_DRAW
-      );
-      gl.vertexAttribPointer(generalPositionLocation, 2, gl.FLOAT, false, 0, 0);
-      gl.drawArrays(gl.TRIANGLES, 0, obstacles.length * 6);
-
-      const rayStartX = 0;
-      const rayStartY = 0;
-      let baseDirX, baseDirY;
-      const mouseMoved =
-        mousePosRef.current.x !== 0 || mousePosRef.current.y !== 0;
-      if (mouseMoved) {
-        baseDirX = mousePosRef.current.x - rayStartX;
-        baseDirY = mousePosRef.current.y - rayStartY;
-        const length = Math.sqrt(baseDirX * baseDirX + baseDirY * baseDirY);
-        baseDirX /= length;
-        baseDirY /= length;
-      } else {
-        baseDirX = initialDirRef.current.x;
-        baseDirY = initialDirRef.current.y;
-      }
-
-      const rays = [];
-      const angleStep = fov / (rayCount - 1);
-      const startAngle = Math.atan2(baseDirY, baseDirX) - fov / 2;
-      for (let i = 0; i < rayCount; i++) {
-        const angle = startAngle + i * angleStep;
-        const dirX = Math.cos(angle);
-        const dirY = Math.sin(angle);
-        const hit = castRay(rayStartX, rayStartY, dirX, dirY);
-        rays.push({ dirX, dirY, ...hit });
-      }
-
-      const initialRayPositions = [];
-      rays.forEach(({ dirX, dirY, x, y }) => {
-        const perpX = -dirY;
-        const perpY = dirX;
-        const halfWidth = rayWidth / 2;
-        initialRayPositions.push(
-          rayStartX - perpX * halfWidth,
-          rayStartY - perpY * halfWidth,
-          rayStartX + perpX * halfWidth,
-          rayStartY + perpY * halfWidth,
-          x - perpX * halfWidth,
-          y - perpY * halfWidth,
-          rayStartX + perpX * halfWidth,
-          rayStartY + perpY * halfWidth,
-          x + perpX * halfWidth,
-          y + perpY * halfWidth,
-          x - perpX * halfWidth,
-          y - perpY * halfWidth
-        );
-      });
-      gl.uniform4f(generalColorLocation, 1.0, 1.0, 0.0, 0.3);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(initialRayPositions),
-        gl.STATIC_DRAW
-      );
-      gl.drawArrays(gl.TRIANGLES, 0, rayCount * 6);
-
-      const reflectRayPositions = [];
-      rays.forEach(({ x, y, reflects, lightDirX, lightDirY, lightHit }) => {
-        if (reflects) {
-          const perpX = -lightDirY;
-          const perpY = lightDirX;
-          const halfWidth = reflectionRayWidth / 2;
-          reflectRayPositions.push(
-            x - perpX * halfWidth,
-            y - perpY * halfWidth,
-            x + perpX * halfWidth,
-            y + perpY * halfWidth,
-            lightHit.x - perpX * halfWidth,
-            lightHit.y - perpY * halfWidth,
-            x + perpX * halfWidth,
-            y + perpY * halfWidth,
-            lightHit.x + perpX * halfWidth,
-            lightHit.y + perpY * halfWidth,
-            lightHit.x - perpX * halfWidth,
-            lightHit.y - perpY * halfWidth
-          );
-        }
-      });
-      gl.uniform4f(generalColorLocation, 0.0, 1.0, 0.0, 1.0);
-      if (reflectRayPositions.length > 0) {
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(reflectRayPositions),
-          gl.STATIC_DRAW
-        );
-        gl.drawArrays(
-          gl.TRIANGLES,
-          0,
-          rays.filter((r) => r.reflects).length * 6
-        );
-      }
-
-      gl.useProgram(circleProgram);
-      gl.enableVertexAttribArray(circlePositionLocation);
-      gl.enableVertexAttribArray(circleCenterLocation);
-      gl.enableVertexAttribArray(circleRadiusLocation);
-      gl.enableVertexAttribArray(circleColorLocation);
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-      gl.vertexAttribPointer(circlePositionLocation, 2, gl.FLOAT, false, 0, 0);
-
-      const circleData = [];
-      rays.forEach(({ x, y }) => {
-        circleData.push(
-          x,
-          y, // center
-          hitPointRadius, // radius
-          1.0,
-          0.0,
-          0.0,
-          1.0
-        );
-      });
-      circleData.push(
-        lightPosRef.current.x,
-        lightPosRef.current.y, // center
-        lightRadius, // radius
-        1.0,
-        1.0,
-        1.0,
-        1.0
-      );
-
-      const circleCount = rays.length + 1;
-      const stride = 7 * 4;
-
-      gl.bindBuffer(gl.ARRAY_BUFFER, circleDataBuffer);
-      gl.bufferData(
-        gl.ARRAY_BUFFER,
-        new Float32Array(circleData),
-        gl.DYNAMIC_DRAW
-      );
-
-      gl.vertexAttribPointer(
-        circleCenterLocation,
-        2,
-        gl.FLOAT,
-        false,
-        stride,
-        0
-      );
-      gl.vertexAttribPointer(
-        circleRadiusLocation,
-        1,
-        gl.FLOAT,
-        false,
-        stride,
-        8
-      );
-      gl.vertexAttribPointer(
-        circleColorLocation,
-        4,
-        gl.FLOAT,
-        false,
-        stride,
-        12
-      );
-
-      if (supportsInstancing) {
-        ext.vertexAttribDivisorANGLE(circleCenterLocation, 1);
-        ext.vertexAttribDivisorANGLE(circleRadiusLocation, 1);
-        ext.vertexAttribDivisorANGLE(circleColorLocation, 1);
-        ext.drawArraysInstancedANGLE(gl.TRIANGLE_STRIP, 0, 4, circleCount);
-        ext.vertexAttribDivisorANGLE(circleCenterLocation, 0);
-        ext.vertexAttribDivisorANGLE(circleRadiusLocation, 0);
-        ext.vertexAttribDivisorANGLE(circleColorLocation, 0);
-      } else {
-        for (let i = 0; i < circleCount; i++) {
-          gl.vertexAttrib2fv(
-            circleCenterLocation,
-            circleData.slice(i * 7, i * 7 + 2)
-          );
-          gl.vertexAttrib1f(circleRadiusLocation, circleData[i * 7 + 2]);
-          gl.vertexAttrib4fv(
-            circleColorLocation,
-            circleData.slice(i * 7 + 3, i * 7 + 7)
-          );
-          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        }
-      }
-    };
-
-    const handleMouseDown = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / canvas.width) * 2 - 1;
-      const y = -(((event.clientY - rect.top) / canvas.height) * 2 - 1);
-      const dx = x - lightPosRef.current.x;
-      const dy = y - lightPosRef.current.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= lightRadius) {
-        isDraggingRef.current = true;
-      }
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / canvas.width) * 2 - 1;
-      const y = -(((event.clientY - rect.top) / canvas.height) * 2 - 1);
-      mousePosRef.current = { x, y };
-      if (isDraggingRef.current) {
-        lightPosRef.current = { x, y };
-      }
-      draw();
-    };
-
-    const handleMouseUp = () => {
-      isDraggingRef.current = false;
-    };
-
-    const handleTouchStart = (event) => {
-      event.preventDefault();
-      const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      const x = ((touch.clientX - rect.left) / canvas.width) * 2 - 1;
-      const y = -(((touch.clientY - rect.top) / canvas.height) * 2 - 1);
-      const dx = x - lightPosRef.current.x;
-      const dy = y - lightPosRef.current.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= lightRadius) {
-        isDraggingRef.current = true;
-      }
-    };
-
-    const handleTouchMove = (event) => {
-      event.preventDefault();
-      const touch = event.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      const x = ((touch.clientX - rect.left) / canvas.width) * 2 - 1;
-      const y = -(((touch.clientY - rect.top) / canvas.height) * 2 - 1);
-      mousePosRef.current = { x, y };
-      if (isDraggingRef.current) {
-        lightPosRef.current = { x, y };
-      }
-      draw();
-    };
-
-    const handleTouchEnd = () => {
-      isDraggingRef.current = false;
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    handleResize();
-    draw();
-
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousedown", handleMouseDown);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseup", handleMouseUp);
-    canvas.addEventListener("touchstart", handleTouchStart);
-    canvas.addEventListener("touchmove", handleTouchMove);
-    canvas.addEventListener("touchend", handleTouchEnd);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousedown", handleMouseDown);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseup", handleMouseUp);
-      canvas.removeEventListener("touchstart", handleTouchStart);
-      canvas.removeEventListener("touchmove", handleTouchMove);
-      canvas.removeEventListener("touchend", handleTouchEnd);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteBuffer(circleDataBuffer);
-      gl.deleteProgram(generalProgram);
-      gl.deleteProgram(circleProgram);
-      gl.deleteShader(generalVertexShader);
-      gl.deleteShader(generalFragmentShader);
-      gl.deleteShader(circleVertexShader);
-      gl.deleteShader(circleFragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const B1 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const isMouseOverRef = useRef(false);
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  const rayWidth = 0.01;
-  const rayCount = 60;
-
-  // Check if point is inside any obstacle
-  const isPointInObstacle = (x, y) => {
-    return obstacles.some((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-      return x >= left && x <= right && y <= top && y >= bottom;
-    });
-  };
-
-  // Ray casting function with border detection
-  const castRay = (startX, startY, dirX, dirY) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-
-    obstacles.forEach((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = (left - startX) / dirX;
-      const tMaxX = (right - startX) / dirX;
-      const tMinY = (top - startY) / dirY;
-      const tMaxY = (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-      }
-    });
-
-    // Check canvas borders (-1 to 1)
-    const borders = [
-      { t: (-1 - startX) / dirX, edge: "left" }, // Left border
-      { t: (1 - startX) / dirX, edge: "right" }, // Right border
-      { t: (1 - startY) / dirY, edge: "top" }, // Top border
-      { t: (-1 - startY) / dirY, edge: "bottom" }, // Bottom border
-    ];
-
-    borders.forEach((border) => {
-      if (border.t > 0 && border.t < t) {
-        const x = startX + border.t * dirX;
-        const y = startY + border.t * dirY;
-        // Check if intersection point is within canvas bounds
-        if (x >= -1 && x <= 1 && y >= -1 && y <= 1) {
-          t = border.t;
-          hitX = x;
-          hitY = y;
-        }
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
-    }
-
-    return { x: hitX, y: hitY };
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      obstacles.forEach((obstacle) => {
-        const positions = [
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-        ];
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      // Set ray origin to mouse position when over canvas, center otherwise
-      const rayStartX = isMouseOverRef.current ? mousePosRef.current.x : 0;
-      const rayStartY = isMouseOverRef.current ? mousePosRef.current.y : 0;
-      const halfWidth = rayWidth / 2;
-
-      // Only draw rays if not over an obstacle
-      if (
-        !(isMouseOverRef.current && isPointInObstacle(rayStartX, rayStartY))
-      ) {
-        // Draw 60 rays in a full circle
-        for (let i = 0; i < rayCount; i++) {
-          const angle = (i / rayCount) * 2 * Math.PI;
-          const rayDirX = Math.cos(angle);
-          const rayDirY = Math.sin(angle);
-
-          const hit = castRay(rayStartX, rayStartY, rayDirX, rayDirY);
-
-          // Draw ray as a thick rectangle (yellow)
-          gl.uniform4f(colorUniformLocation, 1.0, 1.0, 0.0, 1.0);
-          const perpX = -rayDirY;
-          const perpY = rayDirX;
-
-          const rayPositions = [
-            rayStartX - perpX * halfWidth,
-            rayStartY - perpY * halfWidth,
-            rayStartX + perpX * halfWidth,
-            rayStartY + perpY * halfWidth,
-            hit.x - perpX * halfWidth,
-            hit.y - perpY * halfWidth,
-            rayStartX + perpX * halfWidth,
-            rayStartY + perpY * halfWidth,
-            hit.x + perpX * halfWidth,
-            hit.y + perpY * halfWidth,
-            hit.x - perpX * halfWidth,
-            hit.y - perpY * halfWidth,
-          ];
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array(rayPositions),
-            gl.STATIC_DRAW
-          );
-          gl.vertexAttribPointer(
-            positionAttributeLocation,
-            2,
-            gl.FLOAT,
-            false,
-            0,
-            0
-          );
-          gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-          // Draw circle at hit point (red)
-          const circlePoints = 64;
-          const radius = 0.02;
-          const positions = [];
-          for (let j = 0; j < circlePoints; j++) {
-            const circleAngle = (j / circlePoints) * 2 * Math.PI;
-            const x = hit.x + radius * Math.cos(circleAngle);
-            const y = hit.y + radius * Math.sin(circleAngle);
-            positions.push(x, y);
-          }
-          gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array(positions),
-            gl.STATIC_DRAW
-          );
-          gl.vertexAttribPointer(
-            positionAttributeLocation,
-            2,
-            gl.FLOAT,
-            false,
-            0,
-            0
-          );
-          gl.drawArrays(gl.TRIANGLE_FAN, 0, circlePoints);
-        }
-      }
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      mousePosRef.current = {
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      };
-
-      draw();
-    };
-
-    const handleMouseEnter = () => {
-      isMouseOverRef.current = true;
-      draw();
-    };
-
-    const handleMouseLeave = () => {
-      isMouseOverRef.current = false;
-      mousePosRef.current = { x: 0, y: 0 };
-      draw();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseenter", handleMouseEnter);
-    canvas.addEventListener("mouseleave", handleMouseLeave);
-    draw();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseenter", handleMouseEnter);
-      canvas.removeEventListener("mouseleave", handleMouseLeave);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const B2 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const isMouseOverRef = useRef(false);
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  const rayWidth = 0.01;
-  const angleOffset = 0.00001; // Small angle offset for additional rays
-
-  // Check if point is inside any obstacle
-  const isPointInObstacle = (x, y) => {
-    return obstacles.some((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-      return x >= left && x <= right && y <= top && y >= bottom;
-    });
-  };
-
-  const castRay = (startX, startY, dirX, dirY) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-
-    obstacles.forEach((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = (left - startX) / dirX;
-      const tMaxX = (right - startX) / dirX;
-      const tMinY = (top - startY) / dirY;
-      const tMaxY = (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-      }
-    });
-
-    const borders = [
-      { t: (-1 - startX) / dirX, edge: "left" },
-      { t: (1 - startX) / dirX, edge: "right" },
-      { t: (1 - startY) / dirY, edge: "top" },
-      { t: (-1 - startY) / dirY, edge: "bottom" },
-    ];
-
-    borders.forEach((border) => {
-      if (border.t > 0 && border.t < t) {
-        const x = startX + border.t * dirX;
-        const y = startY + border.t * dirY;
-        if (x >= -1 && x <= 1 && y >= -1 && y <= 1) {
-          t = border.t;
-          hitX = x;
-          hitY = y;
-        }
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
-    }
-
-    return { x: hitX, y: hitY };
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      obstacles.forEach((obstacle) => {
-        const positions = [
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-        ];
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      const rayStartX = isMouseOverRef.current ? mousePosRef.current.x : 0;
-      const rayStartY = isMouseOverRef.current ? mousePosRef.current.y : 0;
-      const halfWidth = rayWidth / 2;
-
-      if (
-        !(isMouseOverRef.current && isPointInObstacle(rayStartX, rayStartY))
-      ) {
-        // Collect unique endpoints from obstacles and canvas borders
-        const endpoints = new Set();
-        obstacles.forEach((obstacle) => {
-          endpoints.add(JSON.stringify({ x: obstacle.x, y: obstacle.y }));
-          endpoints.add(
-            JSON.stringify({ x: obstacle.x + obstacle.width, y: obstacle.y })
-          );
-          endpoints.add(
-            JSON.stringify({ x: obstacle.x, y: obstacle.y - obstacle.height })
-          );
-          endpoints.add(
-            JSON.stringify({
-              x: obstacle.x + obstacle.width,
-              y: obstacle.y - obstacle.height,
-            })
-          );
-        });
-        const canvasCorners = [
-          { x: -1, y: 1 },
-          { x: 1, y: 1 },
-          { x: -1, y: -1 },
-          { x: 1, y: -1 },
-        ];
-        canvasCorners.forEach((corner) =>
-          endpoints.add(JSON.stringify(corner))
-        );
-
-        // Cast rays to endpoints with offsets
-        const hitPoints = [];
-        Array.from(endpoints)
-          .map(JSON.parse)
-          .forEach((endpoint) => {
-            const dx = endpoint.x - rayStartX;
-            const dy = endpoint.y - rayStartY;
-            const angle = Math.atan2(dy, dx);
-            const angles = [angle, angle + angleOffset, angle - angleOffset];
-
-            angles.forEach((a) => {
-              const rayDirX = Math.cos(a);
-              const rayDirY = Math.sin(a);
-              const hit = castRay(rayStartX, rayStartY, rayDirX, rayDirY);
-              hitPoints.push({ x: hit.x, y: hit.y });
-            });
-          });
-
-        gl.uniform4f(colorUniformLocation, 1.0, 1.0, 0.0, 1.0);
-        hitPoints.forEach((hit) => {
-          const dx = hit.x - rayStartX;
-          const dy = hit.y - rayStartY;
-          const angle = Math.atan2(dy, dx);
-          const rayDirX = Math.cos(angle);
-          const rayDirY = Math.sin(angle);
-          const perpX = -rayDirY;
-          const perpY = rayDirX;
-
-          const rayPositions = [
-            rayStartX - perpX * halfWidth,
-            rayStartY - perpY * halfWidth,
-            rayStartX + perpX * halfWidth,
-            rayStartY + perpY * halfWidth,
-            hit.x - perpX * halfWidth,
-            hit.y - perpY * halfWidth,
-            rayStartX + perpX * halfWidth,
-            rayStartY + perpY * halfWidth,
-            hit.x + perpX * halfWidth,
-            hit.y + perpY * halfWidth,
-            hit.x - perpX * halfWidth,
-            hit.y - perpY * halfWidth,
-          ];
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array(rayPositions),
-            gl.STATIC_DRAW
-          );
-          gl.vertexAttribPointer(
-            positionAttributeLocation,
-            2,
-            gl.FLOAT,
-            false,
-            0,
-            0
-          );
-          gl.drawArrays(gl.TRIANGLES, 0, 6);
-        });
-
-        // Draw red circles at hit points
-        hitPoints.forEach((hit) => {
-          const circlePoints = 64;
-          const radius = 0.02;
-          const positions = [];
-          for (let j = 0; j < circlePoints; j++) {
-            const circleAngle = (j / circlePoints) * 2 * Math.PI;
-            const x = hit.x + radius * Math.cos(circleAngle);
-            const y = hit.y + radius * Math.sin(circleAngle);
-            positions.push(x, y);
-          }
-          gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array(positions),
-            gl.STATIC_DRAW
-          );
-          gl.vertexAttribPointer(
-            positionAttributeLocation,
-            2,
-            gl.FLOAT,
-            false,
-            0,
-            0
-          );
-          gl.drawArrays(gl.TRIANGLE_FAN, 0, circlePoints);
-        });
-      }
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      mousePosRef.current = {
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      };
-
-      draw();
-    };
-
-    const handleMouseEnter = () => {
-      isMouseOverRef.current = true;
-      draw();
-    };
-
-    const handleMouseLeave = () => {
-      isMouseOverRef.current = false;
-      mousePosRef.current = { x: 0, y: 0 };
-      draw();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseenter", handleMouseEnter);
-    canvas.addEventListener("mouseleave", handleMouseLeave);
-    draw();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseenter", handleMouseEnter);
-      canvas.removeEventListener("mouseleave", handleMouseLeave);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-export const B3 = () => {
-  const canvasRef = useRef(null);
-  const mousePosRef = useRef({ x: 0, y: 0 });
-  const isMouseOverRef = useRef(false);
-
-  const obstacles = [
-    { x: -0.7, y: 0.3, width: 0.2, height: 0.4 },
-    { x: 0.2, y: -0.5, width: 0.3, height: 0.2 },
-    { x: -0.2, y: 0.0, width: 0.15, height: 0.6 },
-  ];
-
-  const rayWidth = 0.01;
-  const angleOffset = 0.00001; // Small angle offset for additional rays
-
-  // Check if point is inside any obstacle
-  const isPointInObstacle = (x, y) => {
-    return obstacles.some((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-      return x >= left && x <= right && y <= top && y >= bottom;
-    });
-  };
-
-  // Ray casting function
-  const castRay = (startX, startY, dirX, dirY) => {
-    let t = Infinity;
-    let hitX = startX;
-    let hitY = startY;
-
-    obstacles.forEach((obstacle) => {
-      const left = obstacle.x;
-      const right = obstacle.x + obstacle.width;
-      const top = obstacle.y;
-      const bottom = obstacle.y - obstacle.height;
-
-      const tMinX = (left - startX) / dirX;
-      const tMaxX = (right - startX) / dirX;
-      const tMinY = (top - startY) / dirY;
-      const tMaxY = (bottom - startY) / dirY;
-
-      const tX1 = Math.min(tMinX, tMaxX);
-      const tX2 = Math.max(tMinX, tMaxX);
-      const tY1 = Math.min(tMinY, tMaxY);
-      const tY2 = Math.max(tMinY, tMaxY);
-
-      const tNear = Math.max(tX1, tY1);
-      const tFar = Math.min(tX2, tY2);
-
-      if (tNear > 0 && tNear < tFar && tNear < t) {
-        t = tNear;
-        hitX = startX + t * dirX;
-        hitY = startY + t * dirY;
-      }
-    });
-
-    const borders = [
-      { t: (-1 - startX) / dirX, edge: "left" },
-      { t: (1 - startX) / dirX, edge: "right" },
-      { t: (1 - startY) / dirY, edge: "top" },
-      { t: (-1 - startY) / dirY, edge: "bottom" },
-    ];
-
-    borders.forEach((border) => {
-      if (border.t > 0 && border.t < t) {
-        const x = startX + border.t * dirX;
-        const y = startY + border.t * dirY;
-        if (x >= -1 && x <= 1 && y >= -1 && y <= 1) {
-          t = border.t;
-          hitX = x;
-          hitY = y;
-        }
-      }
-    });
-
-    if (t === Infinity) {
-      hitX = startX + dirX * 2;
-      hitY = startY + dirY * 2;
-    }
-
-    return { x: hitX, y: hitY };
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("Your browser does not support WebGL");
-      return;
-    }
-
-    const vertexShaderSource = `
-      attribute vec4 a_position;
-      void main() {
-        gl_Position = a_position;
-      }
-    `;
-
-    const fragmentShaderSource = `
-      precision mediump float;
-      uniform vec4 u_color;
-      void main() {
-        gl_FragColor = u_color;
-      }
-    `;
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      generalVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      generalFragmentShaderSource
-    );
-    const program = createProgram(gl, vertexShader, fragmentShader);
-
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const colorUniformLocation = gl.getUniformLocation(program, "u_color");
-    const positionBuffer = gl.createBuffer();
-    const draw = () => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-      gl.uniform4f(colorUniformLocation, 0.5, 0.5, 0.5, 1.0);
-      obstacles.forEach((obstacle) => {
-        const positions = [
-          obstacle.x,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-          obstacle.x + obstacle.width,
-          obstacle.y,
-          obstacle.x + obstacle.width,
-          obstacle.y - obstacle.height,
-          obstacle.x,
-          obstacle.y - obstacle.height,
-        ];
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(positions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-      });
-
-      const rayStartX = isMouseOverRef.current ? mousePosRef.current.x : 0;
-      const rayStartY = isMouseOverRef.current ? mousePosRef.current.y : 0;
-      const halfWidth = rayWidth / 2;
-
-      if (
-        !(isMouseOverRef.current && isPointInObstacle(rayStartX, rayStartY))
-      ) {
-        // Collect unique endpoints from obstacles and canvas borders
-        const endpoints = new Set();
-        obstacles.forEach((obstacle) => {
-          endpoints.add(JSON.stringify({ x: obstacle.x, y: obstacle.y }));
-          endpoints.add(
-            JSON.stringify({ x: obstacle.x + obstacle.width, y: obstacle.y })
-          );
-          endpoints.add(
-            JSON.stringify({ x: obstacle.x, y: obstacle.y - obstacle.height })
-          );
-          endpoints.add(
-            JSON.stringify({
-              x: obstacle.x + obstacle.width,
-              y: obstacle.y - obstacle.height,
-            })
-          );
-        });
-        const canvasCorners = [
-          { x: -1, y: 1 },
-          { x: 1, y: 1 },
-          { x: -1, y: -1 },
-          { x: 1, y: -1 },
-        ];
-        canvasCorners.forEach((corner) =>
-          endpoints.add(JSON.stringify(corner))
-        );
-
-        // Cast rays to endpoints with offsets and store hit points with angles
-        const hitPointsWithAngles = [];
-        Array.from(endpoints)
-          .map(JSON.parse)
-          .forEach((endpoint) => {
-            const dx = endpoint.x - rayStartX;
-            const dy = endpoint.y - rayStartY;
-            const angle = Math.atan2(dy, dx);
-            const angles = [angle, angle + angleOffset, angle - angleOffset];
-
-            angles.forEach((a) => {
-              const rayDirX = Math.cos(a);
-              const rayDirY = Math.sin(a);
-              const hit = castRay(rayStartX, rayStartY, rayDirX, rayDirY);
-              hitPointsWithAngles.push({ x: hit.x, y: hit.y, angle: a });
-            });
-          });
-
-        // Sort hit points by angle (clockwise sorting)
-        hitPointsWithAngles.sort((a, b) => a.angle - b.angle);
-
-        // Draw filled triangles (green) connecting the sorted points
-        gl.uniform4f(colorUniformLocation, 0.0, 1.0, 0.0, 0.5);
-        const trianglePositions = [];
-        for (let i = 0; i < hitPointsWithAngles.length; i++) {
-          const nextIndex = (i + 1) % hitPointsWithAngles.length; // Wrap around to close the polygon
-          trianglePositions.push(
-            rayStartX,
-            rayStartY, // Center point (ray start)
-            hitPointsWithAngles[i].x,
-            hitPointsWithAngles[i].y, // Current point
-            hitPointsWithAngles[nextIndex].x,
-            hitPointsWithAngles[nextIndex].y // Next point
-          );
-        }
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(trianglePositions),
-          gl.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          2,
-          gl.FLOAT,
-          false,
-          0,
-          0
-        );
-        gl.drawArrays(gl.TRIANGLES, 0, hitPointsWithAngles.length * 3);
-
-        gl.uniform4f(colorUniformLocation, 1.0, 1.0, 0.0, 1.0);
-        hitPointsWithAngles.forEach((hit) => {
-          const dx = hit.x - rayStartX;
-          const dy = hit.y - rayStartY;
-          const angle = Math.atan2(dy, dx);
-          const rayDirX = Math.cos(angle);
-          const rayDirY = Math.sin(angle);
-          const perpX = -rayDirY;
-          const perpY = rayDirX;
-
-          const rayPositions = [
-            rayStartX - perpX * halfWidth,
-            rayStartY - perpY * halfWidth,
-            rayStartX + perpX * halfWidth,
-            rayStartY + perpY * halfWidth,
-            hit.x - perpX * halfWidth,
-            hit.y - perpY * halfWidth,
-            rayStartX + perpX * halfWidth,
-            rayStartY + perpY * halfWidth,
-            hit.x + perpX * halfWidth,
-            hit.y + perpY * halfWidth,
-            hit.x - perpX * halfWidth,
-            hit.y - perpY * halfWidth,
-          ];
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array(rayPositions),
-            gl.STATIC_DRAW
-          );
-          gl.vertexAttribPointer(
-            positionAttributeLocation,
-            2,
-            gl.FLOAT,
-            false,
-            0,
-            0
-          );
-          gl.drawArrays(gl.TRIANGLES, 0, 6);
-        });
-
-        hitPointsWithAngles.forEach((hit) => {
-          const circlePoints = 64;
-          const radius = 0.02;
-          const positions = [];
-          for (let j = 0; j < circlePoints; j++) {
-            const circleAngle = (j / circlePoints) * 2 * Math.PI;
-            const x = hit.x + radius * Math.cos(circleAngle);
-            const y = hit.y + radius * Math.sin(circleAngle);
-            positions.push(x, y);
-          }
-          gl.uniform4f(colorUniformLocation, 1.0, 0.0, 0.0, 1.0);
-          gl.bufferData(
-            gl.ARRAY_BUFFER,
-            new Float32Array(positions),
-            gl.STATIC_DRAW
-          );
-          gl.vertexAttribPointer(
-            positionAttributeLocation,
-            2,
-            gl.FLOAT,
-            false,
-            0,
-            0
-          );
-          gl.drawArrays(gl.TRIANGLE_FAN, 0, circlePoints);
-        });
-      }
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw();
-    };
-
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      mousePosRef.current = {
-        x: (x / canvas.width) * 2 - 1,
-        y: -(y / canvas.height) * 2 + 1,
-      };
-
-      draw();
-    };
-
-    const handleMouseEnter = () => {
-      isMouseOverRef.current = true;
-      draw();
-    };
-
-    const handleMouseLeave = () => {
-      isMouseOverRef.current = false;
-      mousePosRef.current = { x: 0, y: 0 };
-      draw();
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseenter", handleMouseEnter);
-    canvas.addEventListener("mouseleave", handleMouseLeave);
-    draw();
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseenter", handleMouseEnter);
-      canvas.removeEventListener("mouseleave", handleMouseLeave);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
-
-const rayTracingVertexShaderSource = `
-attribute vec4 a_position;
-void main() {
-  gl_Position = a_position;
 }
-`;
 
-const rayTracingFragmentShaderSource = `
+function drawRaySegment(ctx, x0, y0, x1, y1, col) {
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+}
+
+function fillCircle(ctx, x, y, r, col) {
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawBackground(ctx, W, H) {
+  ctx.fillStyle = "#060910";
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1;
+  for (let x = -1; x <= 1.01; x += 0.25) {
+    const px = ((x + 1) * W) / 2;
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+  }
+  for (let y = -1; y <= 1.01; y += 0.25) {
+    const py = ((-y + 1) * H) / 2;
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(W, py); ctx.stroke();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Scene2D — single configurable component that all A/B tabs use
+   ══════════════════════════════════════════════════════════════════ */
+function Scene2D({
+  fov = 0,          // field of view in radians (0 = single ray)
+  rayCount = 1,     // number of rays in FOV
+  showReflections = false,
+  showShadows = false,      // B1/B2/B3: shadow feelers
+  showVisibility = false,   // A5/B3 style: visibility polygon
+  lightMode = false,        // draggable light source
+}) {
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const hoverRef = useRef(false);
+  const angleRef = useRef(0);
+  const lightRef = useRef({ x: 0.3, y: 0.4 });
+  const dragRef  = useRef({ what: null }); // 'light' | null
+  const obstRef  = useRef(DEFAULT_OBSTACLES.map((o) => ({ ...o })));
+
+  const canvasRef = use2DCanvas(
+    (ctx, canvas, _t, dt) => {
+      const W = canvas.width, H = canvas.height;
+      const cx = (x) => ((x + 1) * W) / 2;
+      const cy = (y) => ((-y + 1) * H) / 2;
+      const obstacles = obstRef.current;
+
+      drawBackground(ctx, W, H);
+      drawObstacles(ctx, obstacles, cx, cy);
+
+      // Ray emitter position
+      const emX = lightMode ? lightRef.current.x : 0;
+      const emY = lightMode ? lightRef.current.y : 0;
+
+      // Direction: auto-rotate or follow mouse
+      let baseAngle;
+      if (hoverRef.current && !lightMode) {
+        const { x, y } = mouseRef.current;
+        baseAngle = Math.atan2(y - emY, x - emX);
+      } else {
+        angleRef.current += dt * 0.5;
+        baseAngle = angleRef.current;
+      }
+
+      // Build ray angles
+      const angles = [];
+      if (fov === 0) {
+        angles.push(baseAngle);
+      } else {
+        const step = fov / Math.max(rayCount - 1, 1);
+        for (let i = 0; i < rayCount; i++) angles.push(baseAngle - fov / 2 + i * step);
+      }
+
+      // Full 360 for visibility mode
+      const rayAngles = showVisibility
+        ? Array.from({ length: 360 }, (_, i) => (i / 360) * Math.PI * 2)
+        : angles;
+
+      // Cast all rays
+      const hits = rayAngles.map((a) => {
+        const d = { dx: Math.cos(a), dy: Math.sin(a) };
+        const h = castRay(emX, emY, d.dx, d.dy, obstacles);
+        let ref = null;
+        if (showReflections && h.hit) {
+          const [rdx, rdy] = reflect(d.dx, d.dy, h.nx, h.ny);
+          ref = castRay(h.x + rdx * 0.001, h.y + rdy * 0.001, rdx, rdy, obstacles);
+        }
+        return { ...d, h, ref };
+      });
+
+      // Draw visibility polygon fill
+      if (showVisibility && hits.length) {
+        ctx.fillStyle = "rgba(255, 220, 80, 0.08)";
+        ctx.beginPath();
+        ctx.moveTo(cx(emX), cy(emY));
+        hits.forEach(({ h }) => ctx.lineTo(cx(h.x), cy(h.y)));
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Draw rays
+      hits.forEach(({ h, ref }) => {
+        const alpha = showVisibility ? 0.15 : fov > 0 ? 0.45 : 1.0;
+        drawRaySegment(ctx, cx(emX), cy(emY), cx(h.x), cy(h.y),
+          `rgba(255, 220, 60, ${alpha})`);
+        if (ref) {
+          drawRaySegment(ctx, cx(h.x), cy(h.y), cx(ref.x), cy(ref.y),
+            "rgba(100, 220, 255, 0.7)");
+        }
+      });
+
+      // Draw shadow feelers (B-series)
+      if (showShadows) {
+        const lx = lightRef.current.x, ly = lightRef.current.y;
+        obstacles.forEach((o) => {
+          const corners = [
+            [o.x, o.y], [o.x + o.w, o.y],
+            [o.x, o.y - o.h], [o.x + o.w, o.y - o.h],
+          ];
+          corners.forEach(([px, py]) => {
+            const ldx = px - lx, ldy = py - ly;
+            const ll = Math.hypot(ldx, ldy);
+            const h = castRay(lx, ly, ldx / ll, ldy / ll, obstacles);
+            drawRaySegment(ctx, cx(lx), cy(ly), cx(h.x), cy(h.y),
+              "rgba(255,150,50,0.25)");
+          });
+        });
+      }
+
+      // Draw hit dots
+      if (!showVisibility) {
+        hits.forEach(({ h }) => {
+          if (h.hit) fillCircle(ctx, cx(h.x), cy(h.y), 4.5, "#ff4060");
+        });
+      }
+
+      // Emitter dot
+      if (lightMode) {
+        // Glow
+        const g = ctx.createRadialGradient(cx(emX), cy(emY), 0, cx(emX), cy(emY), 24);
+        g.addColorStop(0, "rgba(255,200,60,0.5)");
+        g.addColorStop(1, "transparent");
+        ctx.fillStyle = g; ctx.beginPath();
+        ctx.arc(cx(emX), cy(emY), 24, 0, Math.PI * 2); ctx.fill();
+      }
+      fillCircle(ctx, cx(emX), cy(emY), lightMode ? 7 : 6,
+        lightMode ? "#ffdb50" : "#50ff90");
+    },
+    (canvas) => {
+      const toScene = (ex, ey) => {
+        const r = canvas.getBoundingClientRect();
+        return [((ex - r.left) / r.width) * 2 - 1, -(((ey - r.top) / r.height) * 2 - 1)];
+      };
+      const onEnter = () => { hoverRef.current = true; };
+      const onLeave = () => { hoverRef.current = false; dragRef.current.what = null; };
+      const onDown  = (e) => {
+        const [x, y] = toScene(e.clientX, e.clientY);
+        if (lightMode && Math.hypot(x - lightRef.current.x, y - lightRef.current.y) < 0.08) {
+          dragRef.current.what = "light";
+        }
+      };
+      const onMove  = (e) => {
+        const [x, y] = toScene(e.clientX, e.clientY);
+        mouseRef.current = { x, y };
+        if (dragRef.current.what === "light") {
+          lightRef.current = { x, y };
+        }
+      };
+      const onUp = () => { dragRef.current.what = null; };
+
+      canvas.addEventListener("mouseenter",  onEnter);
+      canvas.addEventListener("mouseleave",  onLeave);
+      canvas.addEventListener("mousedown",   onDown);
+      canvas.addEventListener("mousemove",   onMove);
+      canvas.addEventListener("mouseup",     onUp);
+      return () => {
+        canvas.removeEventListener("mouseenter",  onEnter);
+        canvas.removeEventListener("mouseleave",  onLeave);
+        canvas.removeEventListener("mousedown",   onDown);
+        canvas.removeEventListener("mousemove",   onMove);
+        canvas.removeEventListener("mouseup",     onUp);
+      };
+    }
+  );
+
+  const hint = lightMode
+    ? "drag light · rays cast from light"
+    : showVisibility
+      ? "full 360° visibility"
+      : fov > 0
+        ? "hover to aim · FOV cone"
+        : "hover to aim ray";
+
+  return (
+    <div style={{ width: "100%", position: "relative" }}>
+      <canvas ref={canvasRef} style={{ width: "100%", display: "block" }} />
+      <div style={{
+        position: "absolute", bottom: 8, right: 10,
+        fontFamily: "var(--font-mono)", fontSize: "0.68rem",
+        color: "var(--text-muted)", pointerEvents: "none",
+      }}>{hint}</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Exported 2D scenes — each is just a config of Scene2D
+   ══════════════════════════════════════════════════════════════════ */
+// A1: single ray, no reflections
+export const A1 = () => <Scene2D />;
+
+// A2: single ray + single reflection
+export const A2 = () => <Scene2D showReflections />;
+
+// A3: FOV cone, no reflections
+export const A3 = () => <Scene2D fov={Math.PI / 3} rayCount={24} />;
+
+// A4: FOV cone + reflections
+export const A4 = () => <Scene2D fov={Math.PI / 3} rayCount={24} showReflections />;
+
+// A5: Full 360° visibility polygon (like a lantern)
+export const A5 = () => <Scene2D showVisibility />;
+
+// B1: Draggable point light + shadow feelers
+export const B1 = () => <Scene2D lightMode showShadows fov={Math.PI * 2} rayCount={80} />;
+
+// B2: Draggable point light + reflections
+export const B2 = () => <Scene2D lightMode showReflections fov={Math.PI * 2} rayCount={80} />;
+
+// B3: Draggable light + full shadow + reflections + visibility
+export const B3 = () => <Scene2D lightMode showShadows showReflections showVisibility />;
+
+/* ═══════════════════════════════════════════════════════════════════
+   C1 — GPU 3D Ray Tracer (GLSL fragment shader)
+   ══════════════════════════════════════════════════════════════════ */
+const RAY_TRACE_FS = `
 precision highp float;
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform vec2  u_mouse;
 
-uniform vec3 u_cameraPos;
-uniform vec3 u_sphereCenters[6];
-uniform float u_sphereRadii[6];
-uniform vec3 u_sphereColors[6];
-uniform float u_sphereReflectivities[6];
-uniform vec3 u_groundCenter;
-uniform float u_groundRadius;
-uniform vec3 u_groundColor;
-uniform vec3 u_lightPos;
-uniform vec2 u_resolution;
-
-vec3 lightColor = vec3(1.0, 1.0, 1.0);
-
-struct HitInfo {
-  float t;
-  int sphereIndex;
-  vec3 point;
-  vec3 normal;
-};
-
-float intersectSphere(vec3 rayOrigin, vec3 rayDir, vec3 center, float radius) {
-  vec3 oc = rayOrigin - center;
-  float a = dot(rayDir, rayDir);
-  float b = 2.0 * dot(oc, rayDir);
-  float c = dot(oc, oc) - radius * radius;
-  float discriminant = b * b - 4.0 * a * c;
-  if (discriminant < 0.0) return -1.0;
-  float t = (-b - sqrt(discriminant)) / (2.0 * a);
-  if (t < 0.0) return -1.0;
-  return t;
+// ── Sphere intersection ────────────────────────────────────────────
+float hitSphere(vec3 ro, vec3 rd, vec3 c, float r) {
+  vec3 oc = ro - c;
+  float b = dot(oc, rd), disc = b*b - (dot(oc,oc) - r*r);
+  if (disc < 0.0) return -1.0;
+  float t = -b - sqrt(disc);
+  return t > 0.001 ? t : -1.0;
 }
 
-vec3 computeLighting(vec3 point, vec3 normal, vec3 lightPos, vec3 viewDir, vec3 color, float reflectivity) {
-  vec3 lightDir = normalize(lightPos - point);
-  vec3 ambient = color * 0.1;
-  float diff = max(dot(normal, lightDir), 0.0);
-  vec3 diffuse = color * diff * lightColor;
-  vec3 reflectDir = reflect(-lightDir, normal);
-  float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-  vec3 specular = lightColor * spec * reflectivity;
-  return ambient + diffuse + specular;
+// ── Scene: 7 spheres + infinite ground plane ───────────────────────
+const int N = 7;
+vec3  centers[N];
+float radii[N];
+vec3  albedo[N];
+float rough[N];   // 0 = mirror, 1 = diffuse
+
+// Ground plane (y = -0.5) analytical hit
+float hitPlane(vec3 ro, vec3 rd) {
+  if (abs(rd.y) < 0.0001) return -1.0;
+  float t = -(ro.y + 0.5) / rd.y;
+  return t > 0.001 ? t : -1.0;
 }
 
-HitInfo findClosestHit(vec3 rayOrigin, vec3 rayDir) {
-  HitInfo hit;
-  hit.t = -1.0;
-  hit.sphereIndex = -1;
+// ── Simple sky gradient ────────────────────────────────────────────
+vec3 skyColor(vec3 rd) {
+  float t = clamp(rd.y * 0.5 + 0.5, 0.0, 1.0);
+  return mix(vec3(0.9, 0.6, 0.3), vec3(0.25, 0.45, 0.80), t);
+}
 
-  float tGround = intersectSphere(rayOrigin, rayDir, u_groundCenter, u_groundRadius);
-  if (tGround > 0.0 && (hit.t < 0.0 || tGround < hit.t)) {
-    hit.t = tGround;
-    hit.sphereIndex = -1;
-    hit.point = rayOrigin + rayDir * tGround;
-    hit.normal = normalize(hit.point - u_groundCenter);
+// ── Soft lighting with one sun + ambient ───────────────────────────
+vec3 shade(vec3 ro, vec3 rd, vec3 hit, vec3 nor, vec3 alb, float roughness) {
+  vec3 sunDir = normalize(vec3(0.7, 0.9, 0.5));
+  vec3 sunCol = vec3(1.0, 0.95, 0.85) * 2.5;
+  vec3 sky    = vec3(0.25, 0.45, 0.80) * 0.6;
+
+  float diff = max(dot(nor, sunDir), 0.0);
+
+  // Specular (GGX-like blinn approximation)
+  vec3 H = normalize(sunDir - rd);
+  float spec = pow(max(dot(nor, H), 0.0), 2.0 / (roughness * roughness + 0.001));
+
+  // Simple shadow: re-test scene for sun direction
+  float shadow = 1.0;
+  for (int i = 0; i < N; i++) {
+    float ts = hitSphere(hit + nor*0.002, sunDir, centers[i], radii[i]);
+    if (ts > 0.0) { shadow = 0.12; break; }
   }
 
-  for (int i = 0; i < 6; i++) {
-    float t = intersectSphere(rayOrigin, rayDir, u_sphereCenters[i], u_sphereRadii[i]);
-    if (t > 0.0 && (hit.t < 0.0 || t < hit.t)) {
-      hit.t = t;
-      hit.sphereIndex = i;
-      hit.point = rayOrigin + rayDir * t;
-      hit.normal = normalize(hit.point - u_sphereCenters[i]);
-    }
-  }
-
-  return hit;
+  vec3 col  = alb * (diff * sunCol * shadow + sky);
+  col      += sunCol * spec * (1.0 - roughness) * 0.5 * shadow;
+  return col;
 }
+
+mat3 rotY(float a) { float c=cos(a),s=sin(a); return mat3(c,0,-s, 0,1,0, s,0,c); }
 
 void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution * 2.0 - 1.0;
-  vec3 rayOrigin = u_cameraPos;
-  vec3 rayDir = normalize(vec3(uv, -1.0));
+  // Init scene (GLSL ES 1.0 arrays can't use initializer lists inline)
+  centers[0] = vec3( 0.0,  0.0,  0.0); radii[0] = 0.50; albedo[0] = vec3(0.9, 0.15, 0.1); rough[0] = 0.05;
+  centers[1] = vec3( 1.4,  0.15, 0.3); radii[1] = 0.45; albedo[1] = vec3(0.2, 0.75, 0.3); rough[1] = 0.4;
+  centers[2] = vec3(-1.4,  0.1,  0.4); radii[2] = 0.42; albedo[2] = vec3(0.2, 0.4,  0.9); rough[2] = 0.55;
+  centers[3] = vec3( 0.5, -0.15, 1.2); radii[3] = 0.35; albedo[3] = vec3(0.9, 0.85, 0.1); rough[3] = 0.02;
+  centers[4] = vec3(-0.8,  0.0,  1.0); radii[4] = 0.38; albedo[4] = vec3(0.8, 0.5,  0.2); rough[4] = 0.65;
+  centers[5] = vec3( 0.0,  0.6, -0.8); radii[5] = 0.30; albedo[5] = vec3(0.85,0.85, 0.9); rough[5] = 0.0;
+  centers[6] = vec3(-0.3, -0.2,  1.6); radii[6] = 0.28; albedo[6] = vec3(0.6, 0.1,  0.8); rough[6] = 0.3;
 
-  HitInfo hit = findClosestHit(rayOrigin, rayDir);
-  
-  if (hit.t > 0.0) {
-    vec3 viewDir = normalize(rayOrigin - hit.point);
-    vec3 color;
-    float reflectivity;
-    
-    // Use if-else instead of switch for GLSL ES 1.00 compatibility
-    if (hit.sphereIndex == -1) {
-      color = u_groundColor;
-      reflectivity = 0.1;
-    } else if (hit.sphereIndex == 0) {
-      color = u_sphereColors[0];
-      reflectivity = u_sphereReflectivities[0];
-    } else if (hit.sphereIndex == 1) {
-      color = u_sphereColors[1];
-      reflectivity = u_sphereReflectivities[1];
-    } else if (hit.sphereIndex == 2) {
-      color = u_sphereColors[2];
-      reflectivity = u_sphereReflectivities[2];
-    } else if (hit.sphereIndex == 3) {
-      color = u_sphereColors[3];
-      reflectivity = u_sphereReflectivities[3];
-    } else if (hit.sphereIndex == 4) {
-      color = u_sphereColors[4];
-      reflectivity = u_sphereReflectivities[4];
-    } else if (hit.sphereIndex == 5) {
-      color = u_sphereColors[5];
-      reflectivity = u_sphereReflectivities[5];
-    } else {
-      color = vec3(1.0, 0.0, 0.0); // Red as error case
-      reflectivity = 0.1;
-    }
-    
-    vec3 finalColor = computeLighting(hit.point, hit.normal, u_lightPos, viewDir, color, reflectivity);
-    gl_FragColor = vec4(finalColor, 1.0);
-  } else {
-    gl_FragColor = vec4(0.1, 0.1, 0.2, 1.0);
+  vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
+
+  // Mouse-orbit camera
+  float yaw   =  u_mouse.x * 2.5 + u_time * 0.07;
+  float pitch = -u_mouse.y * 0.8 - 0.15;
+  float dist  = 3.8;
+  vec3 ro = rotY(yaw) * vec3(0.0, sin(pitch)*dist, cos(pitch)*dist);
+  vec3 target = vec3(0.0, 0.1, 0.0);
+  vec3 fwd = normalize(target - ro);
+  vec3 right = normalize(cross(fwd, vec3(0,1,0)));
+  vec3 up    = cross(right, fwd);
+  vec3 rd = normalize(fwd * 1.5 + right * uv.x + up * uv.y);
+
+  // ── Primary hit ─────────────────────────────────────────────────
+  float tMin = 1e9; int iHit = -2; // -2 = sky, -1 = ground
+  vec3 nor, alb; float roughness;
+
+  float tp = hitPlane(ro, rd);
+  if (tp > 0.0) { tMin = tp; iHit = -1; }
+
+  for (int i = 0; i < N; i++) {
+    float t = hitSphere(ro, rd, centers[i], radii[i]);
+    if (t > 0.0 && t < tMin) { tMin = t; iHit = i; }
   }
+
+  vec3 col;
+  if (iHit == -2) {
+    col = skyColor(rd);
+  } else {
+    vec3 hit = ro + rd * tMin;
+    if (iHit == -1) {
+      // Checkerboard ground
+      nor = vec3(0,1,0);
+      float chk = mod(floor(hit.x * 2.0) + floor(hit.z * 2.0), 2.0);
+      alb = mix(vec3(0.75), vec3(0.45), chk);
+      roughness = 0.9;
+    } else {
+      nor = normalize(hit - centers[iHit]);
+      alb = albedo[iHit];
+      roughness = rough[iHit];
+    }
+    col = shade(ro, rd, hit, nor, alb, roughness);
+
+    // ── Mirror reflection (one bounce for low-roughness surfaces) ──
+    if (roughness < 0.15) {
+      vec3 rrd = reflect(rd, nor);
+      vec3 rro = hit + nor * 0.003;
+      float t2 = 1e9; int i2 = -2;
+      float tp2 = hitPlane(rro, rrd);
+      if (tp2 > 0.0) { t2 = tp2; i2 = -1; }
+      for (int j = 0; j < N; j++) {
+        float ts = hitSphere(rro, rrd, centers[j], radii[j]);
+        if (ts > 0.0 && ts < t2) { t2 = ts; i2 = j; }
+      }
+      vec3 rcol;
+      if (i2 == -2) {
+        rcol = skyColor(rrd);
+      } else {
+        vec3 rh = rro + rrd * t2;
+        vec3 rn; vec3 ra; float rrough;
+        if (i2 == -1) {
+          rn = vec3(0,1,0);
+          float chk2 = mod(floor(rh.x*2.)+floor(rh.z*2.), 2.);
+          ra = mix(vec3(0.75), vec3(0.45), chk2); rrough = 0.9;
+        } else {
+          rn = normalize(rh - centers[i2]); ra = albedo[i2]; rrough = rough[i2];
+        }
+        rcol = shade(rro, rrd, rh, rn, ra, rrough);
+      }
+      float reflectance = 1.0 - roughness * roughness;
+      col = mix(col, rcol, reflectance * 0.85);
+    }
+
+    // Distance fog
+    col = mix(skyColor(rd), col, exp(-tMin * 0.08));
+  }
+
+  // ACES tone-map + gamma
+  col = col * (col + 0.0245786) / (col*(0.983729*col+0.432951)+0.238081);
+  col = pow(max(col, 0.0), vec3(0.4545));
+
+  gl_FragColor = vec4(col, 1.0);
 }
 `;
 
-export const C1 = () => {
-  const canvasRef = useRef(null);
-
-  const createShader = (gl, type, source) => {
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-    if (success) return shader;
-    console.error(`Shader compilation failed: ${gl.getShaderInfoLog(shader)}`);
-    gl.deleteShader(shader);
-    return null;
-  };
-
-  const createProgram = (gl, vertexShader, fragmentShader) => {
-    if (!vertexShader || !fragmentShader) {
-      console.error("One or both shaders are null:", {
-        vertexShader,
-        fragmentShader,
-      });
-      return null;
-    }
-    const program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    const success = gl.getProgramParameter(program, gl.LINK_STATUS);
-    if (success) return program;
-    console.error(`Program linking failed: ${gl.getProgramInfoLog(program)}`);
-    gl.deleteProgram(program);
-    return null;
-  };
-
-  const createRandomSpheres = (count, groundY) => {
-    const spheres = { centers: [], radii: [], colors: [], reflectivities: [] };
-
-    const materialTypes = [
-      { color: [0.8, 0.1, 0.1], reflectivity: 0.9 }, // Shiny red
-      { color: [0.1, 0.8, 0.1], reflectivity: 0.6 }, // Glossy green
-      { color: [0.1, 0.1, 0.8], reflectivity: 0.3 }, // Matte blue
-      { color: [0.9, 0.9, 0.1], reflectivity: 0.8 }, // Shiny yellow
-      { color: [0.5, 0.5, 0.5], reflectivity: 1.0 }, // Mirror-like silver
-      { color: [0.8, 0.5, 0.2], reflectivity: 0.4 }, // Semi-glossy orange
-    ];
-
-    for (let i = 0; i < count; i++) {
-      const radius = 0.3 + Math.random() * 0.7;
-      const x = (Math.random() - 0.5) * 10.0;
-      const y = radius + Math.random() * 4.5;
-      const z = (Math.random() - 0.5) * 10.0;
-
-      const material = materialTypes[i % materialTypes.length];
-
-      spheres.centers.push(x, y, z);
-      spheres.radii.push(radius);
-      spheres.colors.push(...material.color);
-      spheres.reflectivities.push(material.reflectivity);
-    }
-    return spheres;
-  };
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const gl = canvas.getContext("webgl");
-    if (!gl) {
-      alert("WebGL not supported");
-      return;
-    }
-
-    const vertexShader = createShader(
-      gl,
-      gl.VERTEX_SHADER,
-      rayTracingVertexShaderSource
-    );
-    const fragmentShader = createShader(
-      gl,
-      gl.FRAGMENT_SHADER,
-      rayTracingFragmentShaderSource
-    );
-
-    if (!vertexShader || !fragmentShader) {
-      console.error("Shader creation failed");
-      return;
-    }
-
-    const program = createProgram(gl, vertexShader, fragmentShader);
-    if (!program) return;
-
-    const positionAttributeLocation = gl.getAttribLocation(
-      program,
-      "a_position"
-    );
-    const cameraPosUniformLocation = gl.getUniformLocation(
-      program,
-      "u_cameraPos"
-    );
-    const sphereCentersUniformLocation = gl.getUniformLocation(
-      program,
-      "u_sphereCenters[0]"
-    );
-    const sphereRadiiUniformLocation = gl.getUniformLocation(
-      program,
-      "u_sphereRadii[0]"
-    );
-    const sphereColorsUniformLocation = gl.getUniformLocation(
-      program,
-      "u_sphereColors[0]"
-    );
-    const sphereReflectivitiesUniformLocation = gl.getUniformLocation(
-      program,
-      "u_sphereReflectivities[0]"
-    );
-    const groundCenterUniformLocation = gl.getUniformLocation(
-      program,
-      "u_groundCenter"
-    );
-    const groundRadiusUniformLocation = gl.getUniformLocation(
-      program,
-      "u_groundRadius"
-    );
-    const groundColorUniformLocation = gl.getUniformLocation(
-      program,
-      "u_groundColor"
-    );
-    const lightPosUniformLocation = gl.getUniformLocation(
-      program,
-      "u_lightPos"
-    );
-    const resolutionUniformLocation = gl.getUniformLocation(
-      program,
-      "u_resolution"
-    );
-
-    const positionBuffer = gl.createBuffer();
-    const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1];
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-    const groundRadius = 1000.0;
-    const groundY = -groundRadius;
-    const spheres = createRandomSpheres(6, groundY);
-
-    const draw = (gl) => {
-      gl.clearColor(0, 0, 0, 1);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(program);
-
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-      gl.vertexAttribPointer(
-        positionAttributeLocation,
-        2,
-        gl.FLOAT,
-        false,
-        0,
-        0
-      );
-
-      gl.uniform3f(cameraPosUniformLocation, 0.0, 5.0, 10.0);
-      gl.uniform3fv(
-        sphereCentersUniformLocation,
-        new Float32Array(spheres.centers)
-      );
-      gl.uniform1fv(
-        sphereRadiiUniformLocation,
-        new Float32Array(spheres.radii)
-      );
-      gl.uniform3fv(
-        sphereColorsUniformLocation,
-        new Float32Array(spheres.colors)
-      );
-      gl.uniform1fv(
-        sphereReflectivitiesUniformLocation,
-        new Float32Array(spheres.reflectivities)
-      );
-      gl.uniform3f(groundCenterUniformLocation, 0.0, -groundRadius, 0.0);
-      gl.uniform1f(groundRadiusUniformLocation, groundRadius);
-      gl.uniform3f(groundColorUniformLocation, 0.5, 0.4, 0.3);
-      gl.uniform3f(lightPosUniformLocation, 2.0, 5.0, 5.0);
-      gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
-
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-    };
-
-    const handleResize = () => {
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      canvas.width = parent.clientWidth;
-      canvas.height = parent.clientWidth;
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      draw(gl);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    draw(gl);
-
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      gl.deleteBuffer(positionBuffer);
-      gl.deleteProgram(program);
-      gl.deleteShader(vertexShader);
-      gl.deleteShader(fragmentShader);
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />;
-};
+export function C1() {
+  const canvasRef = useWebGL(RAY_TRACE_FS);
+  return (
+    <div style={{ width: "100%", position: "relative" }}>
+      <canvas ref={canvasRef} style={{ width: "100%", display: "block" }} />
+      <div style={{
+        position: "absolute", bottom: 8, right: 10,
+        fontFamily: "var(--font-mono)", fontSize: "0.68rem",
+        color: "rgba(255,255,255,0.35)", pointerEvents: "none",
+      }}>
+        move mouse to orbit · auto-rotates
+      </div>
+    </div>
+  );
+}

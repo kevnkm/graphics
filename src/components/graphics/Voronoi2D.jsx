@@ -1,171 +1,168 @@
-import { useRef, useEffect } from "react";
-import { makeCanvas } from "../../utils/Utility";
+/**
+ * Voronoi2D.jsx — Interactive Voronoi diagram with rich GLSL shading.
+ * Uses the shared useWebGL hook.
+ */
+import { useRef, useCallback } from "react";
+import { useWebGL } from "../../utils/webgl";
 
-export const voronoiFragmentSource = `
-  precision mediump float;
-  uniform vec2 u_resolution;
-  uniform float u_time;
-  uniform vec2 u_points[100]; // Increased to 100 points
+const NUM_POINTS = 24; // visible, draggable seed points
 
-  void main() {
-    vec2 uv = gl_FragCoord.xy / u_resolution.xy * 2.0 - 1.0;
-    
-    float minDist = 1000.0;
-    float secondMinDist = 1000.0;
-    for (int i = 0; i < 100; i++) {
-      vec2 point = u_points[i];
-      point.x += sin(u_time + float(i)) * 0.05;
-      point.y += cos(u_time + float(i)) * 0.05;
-      float dist = distance(uv, point);
-      if (dist < minDist) {
-        secondMinDist = minDist;
-        minDist = dist;
-      } else if (dist < secondMinDist) {
-        secondMinDist = dist;
-      }
-    }
+const VORONOI_FS = `
+precision highp float;
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform vec2  u_points[${NUM_POINTS}];
 
-    vec3 cellColor = vec3(0.2, 0.6, 0.6);
-    float borderThreshold = 0.02;
-    float border = smoothstep(borderThreshold, 0.0, secondMinDist - minDist);
-    vec3 color = mix(cellColor, vec3(0.1, 0.3, 0.3), border);
+#define N ${NUM_POINTS}
 
-    float vertexThreshold = 0.01;
-    float vertexStrength = smoothstep(vertexThreshold, 0.0, secondMinDist - minDist) * 
-                          smoothstep(0.1, 0.0, minDist);
-    color = mix(color, vec3(1.0, 0.8, 0.0), vertexStrength);
-
-    float edgeFade = smoothstep(0.0, 0.3, minDist);
-    color = mix(color, vec3(0.05, 0.1, 0.1), edgeFade);
-
-    gl_FragColor = vec4(color, 1.0);
+// ── Smooth voronoi + distance to edge ─────────────────────────────
+// Returns: x = dist to nearest, y = dist to 2nd nearest, z = cell id
+vec3 voronoi(vec2 p) {
+  float d1 = 1e9, d2 = 1e9;
+  float id = 0.0;
+  for (int i = 0; i < N; i++) {
+    vec2 pt = u_points[i];
+    // Subtle time-drift per seed
+    pt += 0.012 * vec2(sin(u_time * 0.4 + float(i) * 1.3),
+                       cos(u_time * 0.3 + float(i) * 2.1));
+    float d = distance(p, pt);
+    if (d < d1) { d2 = d1; d1 = d; id = float(i); }
+    else if (d < d2) { d2 = d; }
   }
+  return vec3(d1, d2, id);
+}
+
+// ── Palette (one colour per cell via hash) ─────────────────────────
+vec3 cellPalette(float id, float t) {
+  float h = fract(id * 0.61803398874 + 0.3);
+  // HSV → RGB (approximate, no branch)
+  vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0,4,2), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  // Slightly desaturate & darken, then pulse brightness with time
+  rgb = mix(vec3(dot(rgb, vec3(0.299, 0.587, 0.114))), rgb, 0.65);
+  rgb *= 0.55 + 0.15 * sin(t * 0.5 + id);
+  return rgb;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution.xy * 2.0 - 1.0;
+  // Correct aspect
+  uv.x *= u_resolution.x / u_resolution.y;
+
+  vec3 v   = voronoi(uv);
+  float d1 = v.x, d2 = v.y, id = v.z;
+
+  float edge   = d2 - d1;                      // distance to cell boundary
+  float border = 1.0 - smoothstep(0.0, 0.025, edge);
+  float center = smoothstep(0.12, 0.0, d1);    // bright dot at seed
+
+  // Cell base colour
+  vec3 col = cellPalette(id, u_time);
+
+  // Interior shading: subtle radial darkening towards boundary
+  col *= 0.7 + 0.3 * smoothstep(0.0, 0.4, edge);
+
+  // Edge glow (white-ish)
+  col = mix(col, vec3(0.9, 0.95, 1.0), border * 0.85);
+
+  // Seed dot highlight
+  col = mix(col, vec3(1.0), center * 0.9);
+
+  // Very subtle vignette
+  float vign = 1.0 - 0.3 * dot(uv / 1.5, uv / 1.5);
+  col *= vign;
+
+  gl_FragColor = vec4(col, 1.0);
+}
 `;
 
-export const Voronoi2D = () => {
-  const canvasRef = useRef(null);
-  const draggingRef = useRef({ pointIndex: -1, touchId: null });
+export function Voronoi2D() {
+  // Mutable seed positions, kept in sync with the shader via Float32Array
+  const pointsRef   = useRef(
+    Array.from({ length: NUM_POINTS }, () => [
+      (Math.random() * 2 - 1) * 0.9,
+      (Math.random() * 2 - 1) * 0.9,
+    ])
+  );
+  const pointsArray = useRef(new Float32Array(NUM_POINTS * 2));
 
-  const points = Array.from({ length: 100 }, () => ({
-    x: Math.random() * 2 - 1,
-    y: Math.random() * 2 - 1,
-  }));
+  // Sync pointsRef → Float32Array
+  const syncArray = () => {
+    const pts = pointsRef.current;
+    const arr = pointsArray.current;
+    for (let i = 0; i < NUM_POINTS; i++) {
+      arr[i * 2]     = pts[i][0];
+      arr[i * 2 + 1] = pts[i][1];
+    }
+  };
+  syncArray();
 
-  const pointsArray = new Float32Array(200);
-  for (let i = 0; i < 100; i++) {
-    pointsArray[i * 2] = points[i].x;
-    pointsArray[i * 2 + 1] = points[i].y;
-  }
+  const dragRef = useRef({ idx: -1 });
 
-  const VoronoiCanvas = makeCanvas(voronoiFragmentSource, {
-    u_points: { type: "2fv", value: pointsArray },
+  const canvasRef = useWebGL(VORONOI_FS, {
+    onSetup(gl, prog, locs) {
+      locs.u_points = gl.getUniformLocation(prog, "u_points[0]");
+    },
+    onFrame(gl, prog, locs) {
+      if (locs.u_points) gl.uniform2fv(locs.u_points, pointsArray.current);
+    },
   });
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Attach interaction events after canvasRef is valid
+  const wiredRef = useRef(false);
+  const attachRef = useCallback((el) => {
+    canvasRef.current = el;
+    if (!el || wiredRef.current) return;
+    wiredRef.current = true;
 
-    const isPointInRange = (x, y, point) => {
-      const dx = x - point.x;
-      const dy = y - point.y;
-      return Math.sqrt(dx * dx + dy * dy) < 0.05;
+    const toNDC = (cx, cy) => {
+      const r   = el.getBoundingClientRect();
+      const nx  = ((cx - r.left) / r.width) * 2 - 1;
+      const ny  = -(((cy - r.top) / r.height) * 2 - 1);
+      // Undo aspect correction done in shader
+      return [nx * (r.width / r.height), ny];
     };
 
-    const toSceneX = (x) => (x / canvas.width) * 2 - 1;
-    const toSceneY = (y) => -((y / canvas.height) * 2 - 1);
-
-    const handleMouseDown = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = toSceneX(event.clientX - rect.left);
-      const y = toSceneY(event.clientY - rect.top);
-      for (let i = 0; i < points.length; i++) {
-        if (isPointInRange(x, y, points[i])) {
-          draggingRef.current.pointIndex = i;
-          break;
-        }
-      }
+    const nearest = (x, y) => {
+      let best = -1, bd = 0.08;
+      pointsRef.current.forEach(([px, py], i) => {
+        const d = Math.hypot(x - px, y - py);
+        if (d < bd) { bd = d; best = i; }
+      });
+      return best;
     };
 
-    const handleMouseMove = (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const x = toSceneX(event.clientX - rect.left);
-      const y = toSceneY(event.clientY - rect.top);
-      const index = draggingRef.current.pointIndex;
-      if (index !== -1) {
-        points[index].x = x;
-        points[index].y = y;
-        pointsArray[index * 2] = x;
-        pointsArray[index * 2 + 1] = y;
-      }
+    const DOWN = (cx, cy) => {
+      const [x, y] = toNDC(cx, cy);
+      dragRef.current.idx = nearest(x, y);
     };
-
-    const handleMouseUp = () => {
-      draggingRef.current.pointIndex = -1;
+    const MOVE = (cx, cy) => {
+      const i = dragRef.current.idx;
+      if (i === -1) return;
+      const [x, y] = toNDC(cx, cy);
+      pointsRef.current[i] = [x, y];
+      syncArray();
     };
+    const UP = () => { dragRef.current.idx = -1; };
 
-    const handleTouchStart = (event) => {
-      event.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const touch = event.touches[0];
-      const x = toSceneX(touch.clientX - rect.left);
-      const y = toSceneY(touch.clientY - rect.top);
-      for (let i = 0; i < points.length; i++) {
-        if (isPointInRange(x, y, points[i])) {
-          draggingRef.current.pointIndex = i;
-          draggingRef.current.touchId = touch.identifier;
-          break;
-        }
-      }
-    };
-
-    const handleTouchMove = (event) => {
-      event.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const touches = event.touches;
-      for (let i = 0; i < touches.length; i++) {
-        if (touches[i].identifier === draggingRef.current.touchId) {
-          const x = toSceneX(touches[i].clientX - rect.left);
-          const y = toSceneY(touches[i].clientY - rect.top);
-          const index = draggingRef.current.pointIndex;
-          if (index !== -1) {
-            points[index].x = x;
-            points[index].y = y;
-            pointsArray[index * 2] = x;
-            pointsArray[index * 2 + 1] = y;
-          }
-          break;
-        }
-      }
-    };
-
-    const handleTouchEnd = (event) => {
-      event.preventDefault();
-      const touches = event.changedTouches;
-      for (let i = 0; i < touches.length; i++) {
-        if (touches[i].identifier === draggingRef.current.touchId) {
-          draggingRef.current.pointIndex = -1;
-          draggingRef.current.touchId = null;
-          break;
-        }
-      }
-    };
-
-    canvas.addEventListener("mousedown", handleMouseDown);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseup", handleMouseUp);
-    canvas.addEventListener("touchstart", handleTouchStart);
-    canvas.addEventListener("touchmove", handleTouchMove);
-    canvas.addEventListener("touchend", handleTouchEnd);
-
-    return () => {
-      canvas.removeEventListener("mousedown", handleMouseDown);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseup", handleMouseUp);
-      canvas.removeEventListener("touchstart", handleTouchStart);
-      canvas.removeEventListener("touchmove", handleTouchMove);
-      canvas.removeEventListener("touchend", handleTouchEnd);
-    };
+    el.addEventListener("mousedown",  (e) => DOWN(e.clientX, e.clientY));
+    el.addEventListener("mousemove",  (e) => MOVE(e.clientX, e.clientY));
+    el.addEventListener("mouseup",    UP);
+    el.addEventListener("mouseleave", UP);
+    el.addEventListener("touchstart", (e) => { e.preventDefault(); DOWN(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+    el.addEventListener("touchmove",  (e) => { e.preventDefault(); MOVE(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+    el.addEventListener("touchend",   UP);
   }, []);
 
-  return <VoronoiCanvas ref={canvasRef} />;
-};
+  return (
+    <div style={{ width: "100%", position: "relative" }}>
+      <canvas ref={attachRef} style={{ width: "100%", display: "block" }} />
+      <div style={{
+        position: "absolute", bottom: 8, right: 10,
+        fontFamily: "var(--font-mono)", fontSize: "0.68rem",
+        color: "var(--text-muted)", pointerEvents: "none",
+      }}>
+        drag seeds to reshape cells
+      </div>
+    </div>
+  );
+}

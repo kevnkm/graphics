@@ -12,10 +12,8 @@ import ShaderFX from "./pages/projects/ShaderFX";
 function App() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <div className="min-h-screen bg-white flex flex-col">
+      <div style={{ minHeight: "100vh", background: "var(--bg-base)" }}>
         <NavBar />
-
-        {/* Page Content */}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/barrel-distortion" element={<BarrelDistortion />} />
