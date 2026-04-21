@@ -1,57 +1,50 @@
-// main/src/pages/projects/RayMarching.js
-
 import React from "react";
 import { useState } from "react";
-import * as RayMarchingCanvas from "../../components/RayMarchingCanvas";
+import * as RayTracingCanvas from "../../components/graphics/RayTracingCanvas";
 
 const componentGroupList = [
   {
     groupName: "2D Demonstration",
-    description: (
-      <>
-        This interactive scene visualizes 2D ray marching with Signed Distance
-        Functions (SDF). A ray originates from a green point at the center,
-        stepping toward the target position. At each step, a circle outlines the
-        distance to the nearest of three circular obstacles, with small yellow
-        dots marking the steps and a red dot at the end.
-      </>
-    ),
+    description:
+      "In the 2D ray tracing example, we trace rays from the camera to each pixel on the screen and check for intersections with objects in the scene. If an intersection is found, we calculate the distance to the intersection point and color the pixel based on the distance. This creates a simple 2D rendering of the scene with shadows and reflections.",
     components: {
-      A1: () => <RayMarchingCanvas.A1 />,
+      A1: () => <RayTracingCanvas.A1 />,
+      A2: () => <RayTracingCanvas.A2 />,
+      A3: () => <RayTracingCanvas.A3 />,
+      A4: () => <RayTracingCanvas.A4 />,
+      A5: () => <RayTracingCanvas.A5 />,
+      B1: () => <RayTracingCanvas.B1 />,
+      B2: () => <RayTracingCanvas.B2 />,
+      B3: () => <RayTracingCanvas.B3 />,
     },
   },
   {
-    groupName: "3D Ray Marching",
+    groupName: "3D Ray Tracing",
     description: (
       <>
-        This scene showcases a 3D ray marching renderer that visualizes complex
-        shapes like spheres, toruses, and cubes using Signed Distance Fields
-        (SDF). A reference for various SDFs including the ones used in this
-        project can be found at{" "}
+        This scene implements a basic ray tracing renderer, leveraging the GPU
+        for accelerated rendering. It follows the principles outlined in{" "}
         <a
-          href="https://iquilezles.org/articles/distfunctions/"
+          href="https://raytracing.github.io/"
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-600 hover:underline ml-1"
         >
-          this page by Inigo Quilez
-        </a>
-        . Instead of traditional rendering methods, the algorithm marches rays
-        step by step through space, dynamically adjusting their movement based
-        on the closest object's distance. A key feature of this approach is
-        smooth blending, allowing nearby shapes to merge seamlessly.
+          'Ray Tracing In One Weekend'
+        </a>{" "}
+        book by Peter Shirley, using GLSL and Three.js for GPU-based output.
       </>
     ),
     components: {
-      B1: () => <RayMarchingCanvas.B1 />,
+      C1: () => <RayTracingCanvas.C1 />,
     },
   },
 ];
 
-function RayMarching() {
+function RayTracing() {
   const [activeTabs, setActiveTabs] = useState({
-    "2D Demonstration": "A1",
-    "3D Ray Marching": "B1",
+    "2D Demonstration": "A5",
+    "3D Ray Tracing": "C1",
   });
 
   const handleTabChange = (groupName, tab) => {
@@ -68,14 +61,11 @@ function RayMarching() {
           Introduction
         </h1>
         <p className="text-center">
-          Ray marching is a rendering technique used in 3D computer graphics
-          that offers an alternative to traditional polygon-based rendering.
-          Instead of rasterizing geometry, ray marching traces rays through a
-          scene and iteratively advances them until they hit an object or reach
-          a maximum distance. This allows for the rendering of complex shapes
-          and effects such as fractals, volumetric clouds, and soft shadows. Ray
-          marching is commonly used in combination with signed distance
-          functions (SDFs) to represent objects in the scene.
+          Ray tracing is a sophisticated rendering technique in computer
+          graphics that simulates the physical behavior of light by casting rays
+          from the camera into the scene, determining what they hit, and then
+          tracing secondary rays (like reflections or shadow rays) to light
+          sources.
         </p>
 
         {componentGroupList.map((group, index) => (
@@ -115,4 +105,4 @@ function RayMarching() {
   );
 }
 
-export default RayMarching;
+export default RayTracing;

@@ -1,6 +1,6 @@
 // main/src/components/Water.js
 
-import { makeCanvas } from "../utils/Utility";
+import { makeCanvas } from "../../utils/Utility";
 
 export const WaterTexture = makeCanvas(`
   precision mediump float;

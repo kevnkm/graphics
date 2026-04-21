@@ -1,5 +1,5 @@
 
-import { makeCanvas } from "../utils/Utility";
+import { makeCanvas } from "../../utils/Utility";
 
 export const Fire2D = makeCanvas(`
   precision mediump float;

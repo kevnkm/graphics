@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { makeCanvas } from "../utils/Utility";
+import { makeCanvas } from "../../utils/Utility";
 
 export const voronoiFragmentSource = `
   precision mediump float;

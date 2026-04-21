@@ -1,7 +1,7 @@
 // main/src/pages/projects/BoidsSimulation.js
 
 import React, { useState } from "react";
-import { A1, A2, A3, A4, A5, A6, A7, A8, A9 } from "../../components/Boids2D";
+import { A1, A2, A3, A4, A5, A6, A7, A8, A9 } from "../../components/graphics/Boids2D";
 
 const componentGroupList = [
   {

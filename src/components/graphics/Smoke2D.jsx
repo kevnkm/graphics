@@ -1,4 +1,4 @@
-import { makeCanvas } from "../utils/Utility";
+import { makeCanvas } from "../../utils/Utility";
 
 export const Smoke2D = makeCanvas(`
   precision mediump float;

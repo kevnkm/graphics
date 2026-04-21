@@ -2,11 +2,11 @@
 
 import React from "react";
 import { useState } from "react";
-import { Voronoi2D } from "../../components/Voronoi2D";
-import { Mandelbrot, Julia } from "../../components/Fractals2D";
-import { WaterTexture } from "../../components/Water";
-import { Fire2D } from "../../components/Fire2D";
-import { Smoke2D } from "../../components/Smoke2D";
+import { Voronoi2D } from "../../components/graphics/Voronoi2D";
+import { Mandelbrot, Julia } from "../../components/graphics/Fractals2D";
+import { WaterTexture } from "../../components/graphics/Water";
+import { Fire2D } from "../../components/graphics/Fire2D";
+import { Smoke2D } from "../../components/graphics/Smoke2D";
 
 const componentGroupList = [
   {

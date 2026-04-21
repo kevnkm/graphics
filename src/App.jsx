@@ -1,5 +1,6 @@
-import "./App.css";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import "./styles/App.css";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import NavBar from "./components/layout/NavBar";
 import Home from "./pages/Home";
 import BarrelDistortion from "./pages/projects/BarrelDistortion";
 import BoidsSimulation from "./pages/projects/BoidsSimulation";
@@ -7,28 +8,12 @@ import RayMarching from "./pages/projects/RayMarching";
 import RayTracing from "./pages/projects/RayTracing";
 import VolumetricCloud from "./pages/projects/VolumetricCloud";
 import ShaderFX from "./pages/projects/ShaderFX";
-import logo from "./images/memoji_laptop.png";
 
 function App() {
   return (
-    <BrowserRouter basename={process.env.PUBLIC_URL}>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <div className="min-h-screen bg-white flex flex-col">
-        {/* Persistent Navigation Bar */}
-        <nav className="bg-white p-4 h-16">
-          <div className="container mx-auto flex justify-between items-center h-full px-4">
-            <Link to="/" className="flex items-center">
-              <img
-                src={logo}
-                alt="Logo"
-                className="h-6 w-auto"
-                draggable="false"
-              />
-              <span className="text-xl font-bold font-dot-gothic-16 sm:inline ml-2">
-                Graphics Hub
-              </span>
-            </Link>
-          </div>
-        </nav>
+        <NavBar />
 
         {/* Page Content */}
         <Routes>

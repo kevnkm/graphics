@@ -1,6 +1,6 @@
 // main/src/components/Fractals2D.js
 
-import { makeCanvas } from "../utils/Utility";
+import { makeCanvas } from "../../utils/Utility";
 
 export const Mandelbrot = makeCanvas(
   `

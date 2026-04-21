@@ -1,6 +1,6 @@
 // main/src/components/ShaderFXCanvas.js
 
-import { makeCanvas } from "../utils/Utility";
+import { makeCanvas } from "../../utils/Utility";
 
 export const F1 = makeCanvas(`
   precision mediump float;

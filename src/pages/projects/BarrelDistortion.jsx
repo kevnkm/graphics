@@ -1,38 +1,32 @@
 import React from "react";
 import { useState } from "react";
-import * as VolumetricCloudCanvas from "../../components/VolumetricCloudCanvas";
-
-// References:
-// https://iquilezles.org/articles/dynclouds/
-// https://blog.maximeheckel.com/posts/real-time-cloudscapes-with-volumetric-raymarching/
-// https://www.thefrontdev.co.uk/real-time-volumetric-clouds-glsl-and-three
-// https://www.shadertoy.com/view/3sffzj
-// https://www.shadertoy.com/view/XdBSWd
+import * as BarrelDistortionCanvas from "../../components/graphics/BarrelDistortionCanvas";
 
 const componentGroupList = [
   {
-    groupName: "Blob",
+    groupName: "Shader-Based Distortion",
     description: (
       <>
-        This scene features a shader that combines 3D Worley and Perlin noise
-        for clumpy cloud formations, a directional light source with
-        self-shadowing for depth, and Mie scattering for soft edge glow. The
-        cloud is confined within a bounding sphere, with tweakable parameters
-        like density, softness, and shadow intensity exposed as uniforms for
-        customization. Optimized with adjustable step counts and early exit
-        conditions, the renderer achieves a balance of performance and visual
-        quality, showcasing dynamic, evolving clouds in real-time.
+        Real-time barrel distortion implemented in GLSL fragment shaders. The
+        distortion follows the radial polynomial model:
+        <br />
+        <code className="block bg-gray-800 text-green-400 text-xs p-2 rounded mt-2 font-mono">
+          r' = r × (1 + k₁·r² + k₂·r⁴)
+        </code>
+        Commonly used in VR headsets, camera post-processing, and creative
+        effects.
       </>
     ),
     components: {
-      A1: () => <VolumetricCloudCanvas.A1 />,
+      A1: () => <BarrelDistortionCanvas.A1 />,
+      A2: () => <BarrelDistortionCanvas.A2 />,
     },
   },
 ];
 
-function VolumetricCloud() {
+function BarrelDistortion() {
   const [activeTabs, setActiveTabs] = useState({
-    Blob: "A1",
+    "Shader-Based Distortion": "A1",
   });
 
   const handleTabChange = (groupName, tab) => {
@@ -49,10 +43,10 @@ function VolumetricCloud() {
           Introduction
         </h1>
         <p className="text-center">
-          Volumetric clouds are a common feature in video games and simulations,
-          adding depth and realism to virtual environments. This project
-          showcases a demonstration of a volumetric cloud renderer that
-          visualizes a realistic, puffy cloud mass using ray marching.
+          Barrel distortion is a common lens imperfection where straight lines
+          appear to bow outward, especially in wide-angle and fisheye lenses.
+          Explore real-time distortion effects and correction techniques using
+          WebGL and GLSL shaders.
         </p>
 
         {componentGroupList.map((group, index) => (
@@ -92,4 +86,4 @@ function VolumetricCloud() {
   );
 }
 
-export default VolumetricCloud;
+export default BarrelDistortion;
