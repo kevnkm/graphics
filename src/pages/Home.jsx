@@ -149,7 +149,7 @@ function Home() {
           >
             by{" "}
             <a
-              href="https://kevinkmkim.github.io"
+              href="https://kevnkm.github.io"
               target="_blank"
               rel="noopener noreferrer"
               style={{ color: "var(--text-secondary)" }}
